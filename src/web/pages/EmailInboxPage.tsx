@@ -5,7 +5,7 @@ import { useAuth } from '../auth';
 import { Icon } from '../components/Icon';
 import { Bone, SkeletonMailList } from '../components/Skeleton';
 import { usePrefs } from '../prefs';
-import { type EmailItem, extractAvatarFromBody, initialsOf, relativeTime, senderName, snippetOf } from '../emailHelpers';
+import { type EmailItem, extractAvatarFromBody, initialsOf, relativeTime, senderName, stripHtml } from '../emailHelpers';
 import { EmailDetailPane } from './EmailDetailPage';
 
 type Tab = 'all' | 'unread';
@@ -51,7 +51,8 @@ function hueOf(text: string): number {
 /** One mail in the list: colour avatar, sender and age, subject, and a one-line preview. Unread mail is bold, with a dot. */
 function EmailRow({ email, selected, lang, onOpen }: { email: EmailItem; selected: boolean; lang: string; onOpen: (id: string) => void }) {
   const avatarUrl = extractAvatarFromBody(email.body);
-  const preview = snippetOf(email.body, null).slice(0, 160);
+  // The preview is the start of the mail as Gmail gives it, e.g. "Diminta oleh FR dari Apple TV pada 14 November…".
+  const preview = stripHtml(email.snippet ?? '').replace(/\s+/g, ' ').trim();
   const unread = !email.read_at;
   const name = senderName(email.from_email);
   return (

@@ -9,6 +9,8 @@ export interface EmailItem {
   received_at: string;
   created_at: string;
   read_at?: string | null;
+  /** The start of the mail text from Gmail: the list's preview. */
+  snippet?: string | null;
 }
 
 export function initialsOf(email: string): string {

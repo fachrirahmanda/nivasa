@@ -41,6 +41,25 @@ function decodeBase64Url(data: string): string {
   return new TextDecoder('utf-8').decode(bytes);
 }
 
+/**
+ * The line the list shows for a mail: the request sentence ("Diminta oleh FR dari Apple TV pada …") when there is one,
+ * otherwise the start of the text. Read from the message already fetched during sync, so it costs no extra request.
+ */
+function previewOf(payload: GmailPart): string {
+  const html = findBody(payload, 'text/html');
+  const plain = findBody(payload, 'text/plain');
+  let text = plain ? decodeBase64Url(plain) : html ? decodeBase64Url(html) : '';
+  if (!plain && html) {
+    text = text
+      .replace(/<(style|script)[\s\S]*?<\/\1>/gi, '')
+      .replace(/<\/(p|div|li|tr|h[1-6])>|<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '');
+  }
+  const lines = text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const request = lines.find((l) => /\b(diminta|requested)\b/i.test(l) && /\b(dari|pada|from|on)\b/i.test(l));
+  return (request ?? lines.slice(0, 2).join(' ')).slice(0, 200);
+}
+
 /** Ambil access token Gmail yang valid, refresh otomatis kalau sudah kedaluwarsa. */
 async function getAccessToken(env: RouteContext['env']): Promise<string> {
   const row = await env.DB.prepare(
@@ -242,7 +261,7 @@ export async function listEmails({ env, request }: RouteContext) {
 
   // One extra row tells us whether there is a next page without a second query for it.
   const rows = await env.DB.prepare(
-    `SELECT id, subject, from_email, to_email, body, received_at, created_at, read_at FROM emails ${whereSql} ORDER BY received_at DESC LIMIT ? OFFSET ?`
+    `SELECT id, subject, from_email, to_email, body, received_at, created_at, read_at, snippet FROM emails ${whereSql} ORDER BY received_at DESC LIMIT ? OFFSET ?`
   )
     .bind(...binds, pageSize + 1, (page - 1) * pageSize)
     .all<{
@@ -254,6 +273,7 @@ export async function listEmails({ env, request }: RouteContext) {
       received_at: string;
       created_at: string;
       read_at: string | null;
+      snippet: string | null;
     }>();
 
   const totals = await env.DB.prepare(
@@ -359,8 +379,11 @@ export async function emailSync({ env }: RouteContext) {
   let count = 0;
 
   for (const msg of messages) {
-    const existing = await env.DB.prepare('SELECT id FROM emails WHERE id = ?').bind(msg.id).first();
-    if (existing) continue;
+    // New mail is stored. Mail stored before snippets existed gets its snippet filled in (not counted as new).
+    const existing = await env.DB.prepare('SELECT id, snippet FROM emails WHERE id = ?')
+      .bind(msg.id)
+      .first<{ id: string; snippet: string | null }>();
+    if (existing && existing.snippet !== null) continue;
 
     const msgRes = await googleFetch(
       `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
@@ -373,14 +396,20 @@ export async function emailSync({ env }: RouteContext) {
       payload: GmailPart & { headers: { name: string; value: string }[] };
       internalDate: string;
     };
+    const snippet = previewOf(msgData.payload);
+
+    if (existing) {
+      await env.DB.prepare('UPDATE emails SET snippet = ? WHERE id = ?').bind(snippet, msg.id).run();
+      continue;
+    }
 
     const { subject, fromEmail, toEmail } = readHeaders(msgData.payload.headers);
     const receivedAt = new Date(parseInt(msgData.internalDate, 10)).toISOString();
 
     await env.DB.prepare(
-      "INSERT INTO emails (id, subject, from_email, to_email, body, received_at, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))"
+      "INSERT INTO emails (id, subject, from_email, to_email, body, received_at, created_at, snippet) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)"
     )
-      .bind(msg.id, subject, fromEmail, toEmail, '', receivedAt)
+      .bind(msg.id, subject, fromEmail, toEmail, '', receivedAt, snippet)
       .run();
     count++;
   }
