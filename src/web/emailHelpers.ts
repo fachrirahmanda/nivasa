@@ -8,6 +8,7 @@ export interface EmailItem {
   body: string;
   received_at: string;
   created_at: string;
+  read_at?: string | null;
 }
 
 export function initialsOf(email: string): string {
@@ -46,4 +47,29 @@ export function detectActionButton(body: string): string | null {
 export function snippetOf(body: string, action: string | null): string {
   const lines = stripHtml(body).split('\n').map((l) => l.trim()).filter(Boolean);
   return lines.filter((l) => l !== action).join(' ');
+}
+
+/** Short age of a mail for the list: "now", "9m", "3h", "2d", then the date. */
+export function relativeTime(iso: string, lang: string, now = Date.now()): string {
+  const then = new Date(iso).getTime();
+  const minutes = Math.round((now - then) / 60000);
+  if (minutes < 1) return lang === 'id' ? 'baru' : 'now';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d`;
+  return new Date(iso).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' });
+}
+
+/** The sender's name without the address: "Netflix <info@…>" → "Netflix". */
+export function senderName(from: string): string {
+  const name = from.replace(/<[^>]*>/g, '').replace(/"/g, '').trim();
+  return name || from;
+}
+
+/** The address alone: "Netflix <info@…>" → "info@…". */
+export function senderAddress(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return m ? m[1] : from;
 }

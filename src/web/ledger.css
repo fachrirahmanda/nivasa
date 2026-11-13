@@ -13,8 +13,6 @@ html:not([data-palette='pastel']) {
   --card-edge: light-dark(rgb(31 27 22 / 0.08), rgb(239 233 222 / 0.08));
   --text: light-dark(#1f1c18, #efebe3);
   --muted: light-dark(#6b6459, #a8a297);
-  --accent: light-dark(#1f1c18, #efebe3);
-  --accent-soft: light-dark(rgb(31 28 24 / 0.07), rgb(239 235 227 / 0.1));
   --on-accent: light-dark(#fdfcfa, #1f1c18);
 }
 

@@ -4,9 +4,9 @@ import { useAuth } from '../auth';
 import { usePrefs } from '../prefs';
 import { Icon } from '../components/Icon';
 import { SkeletonRows } from '../components/Skeleton';
-import { type EmailItem, extractAvatarFromBody, initialsOf, detectActionButton } from '../emailHelpers';
+import { type EmailItem, extractAvatarFromBody, initialsOf, senderAddress, senderName } from '../emailHelpers';
 
-/** The open email, shown in the pane beside the inbox list (full width on phones, with a back button). */
+/** The open email, read-only, in the pane beside the list (full width on phones, with a back button). */
 export function EmailDetailPane({ id, onBack }: { id: string; onBack: () => void }) {
   const { t, lang } = usePrefs();
   const { user } = useAuth();
@@ -35,13 +35,17 @@ export function EmailDetailPane({ id, onBack }: { id: string; onBack: () => void
 
   if (!user) return null;
 
+  const back = (
+    <button type="button" className="btn btn-ghost btn-sm inbox-back" onClick={onBack}>
+      <Icon name="chevron-left" size={16} />
+      <span>{t('email.back')}</span>
+    </button>
+  );
+
   if (error) {
     return (
-      <div className="inbox-detail-body">
-        <button type="button" className="btn btn-ghost btn-sm inbox-back" onClick={onBack}>
-          <Icon name="chevron-left" size={16} />
-          <span>{t('email.back')}</span>
-        </button>
+      <div className="mail-reader">
+        {back}
         <p className="text-danger">{error}</p>
       </div>
     );
@@ -49,54 +53,40 @@ export function EmailDetailPane({ id, onBack }: { id: string; onBack: () => void
 
   if (!email) {
     return (
-      <div className="inbox-detail-body">
+      <div className="mail-reader">
+        {back}
         <SkeletonRows count={3} />
       </div>
     );
   }
 
   const avatarUrl = extractAvatarFromBody(email.body);
-  const action = detectActionButton(email.body);
-  const date = new Date(email.received_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', {
+  const date = new Date(email.received_at).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
   });
 
   return (
-    <article className="inbox-detail-body">
-      <button type="button" className="btn btn-ghost btn-sm inbox-back" onClick={onBack}>
-        <Icon name="chevron-left" size={16} />
-        <span>{t('email.back')}</span>
-      </button>
-
-      <header className="inbox-detail-head">
-        <h2>{email.subject}</h2>
-        <div className="inbox-detail-meta">
-          <span className="inbox-avatar" aria-hidden="true">
+    <article className="mail-reader">
+      {back}
+      <header className="mail-reader-head">
+        <div className="mail-sender">
+          <span className="mail-avatar mail-avatar-lg" aria-hidden="true">
             {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : initialsOf(email.from_email)}
           </span>
           <div>
-            <strong>{email.from_email}</strong>
-            <span>{date}</span>
+            <strong>{senderName(email.from_email)}</strong>
+            <span>{senderAddress(email.from_email)}</span>
           </div>
         </div>
-        <div className="inbox-detail-actions">
-          {action && (
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => console.log('Action clicked:', email.id, action)}>
-              {action}
-            </button>
-          )}
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void api.post(`/emails/${email.id}/read`).catch(() => {})}>
-            <Icon name="check" size={14} />
-            <span>{t('email.markRead')}</span>
-          </button>
-        </div>
+        <time className="mail-reader-date" dateTime={email.received_at}>{date}</time>
       </header>
 
-      <div className="inbox-detail-content email-detail-body" dangerouslySetInnerHTML={{ __html: email.body }} />
+      <h2 className="mail-reader-subject">{email.subject || '(no subject)'}</h2>
+      <div className="mail-reader-body email-detail-body" dangerouslySetInnerHTML={{ __html: email.body }} />
     </article>
   );
 }

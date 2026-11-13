@@ -212,7 +212,7 @@ export async function emailCallback({ request, env }: RouteContext) {
 /** GET /api/emails — daftar email inbox. */
 export async function listEmails({ env }: RouteContext) {
   const emails = await env.DB.prepare(
-    'SELECT id, subject, from_email, to_email, body, received_at, created_at FROM emails ORDER BY received_at DESC LIMIT 50'
+    'SELECT id, subject, from_email, to_email, body, received_at, created_at, read_at FROM emails ORDER BY received_at DESC LIMIT 50'
   ).all<{
     id: string;
     subject: string;
@@ -221,6 +221,7 @@ export async function listEmails({ env }: RouteContext) {
     body: string;
     received_at: string;
     created_at: string;
+    read_at: string | null;
   }>();
 
   return json(emails.results ?? []);
