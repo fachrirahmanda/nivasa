@@ -1,141 +1,42 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { SkeletonRows } from '../components/Skeleton';
-import { Icon } from '../components/Icon';
 import { usePrefs } from '../prefs';
+import { type EmailItem, extractAvatarFromBody, initialsOf, snippetOf, detectActionButton } from '../emailHelpers';
+import { EmailDetailPane } from './EmailDetailPage';
 
-interface EmailItem {
-  id: string;
-  subject: string;
-  from_email: string;
-  to_email: string;
-  body: string;
-  received_at: string;
-  created_at: string;
-}
-
-function initialsOf(email: string): string {
-  const name = email.split('@')[0];
-  const parts = name.split(/[.\-_]/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
-}
-
-function extractAvatarFromBody(body: string): string | null {
-  const match = body.match(/<img[^>]+src="([^"]+)"/i);
-  return match ? match[1] : null;
-}
-
-function stripHtml(html: string): string {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || div.innerText || '';
-}
-
-function detectActionButton(body: string): string | null {
-  const plain = stripHtml(body);
-  const lines = plain.split('\n').map((l) => l.trim()).filter(Boolean);
-  const actionKeywords = [
-    'ya, itu saya',
-    'ya, itu ada',
-    'konfirmasi',
-    'verifikasi',
-    'aktifkan',
-    'setujui',
-    'terima',
-  ];
-  for (const line of lines) {
-    const upper = line.toUpperCase();
-    // Action button text: short line (2-40 chars), all uppercase or contains action keywords
-    if (
-      line.length > 1 &&
-      line.length < 40 &&
-      (upper === line ||
-        actionKeywords.some((kw) => upper.includes(kw.toUpperCase())))
-    ) {
-      return line;
-    }
-  }
-  return null;
-}
-
-function EmailItemCard({ email, t, lang }: { email: EmailItem; t: any; lang: string }) {
-  const navigate = useNavigate();
+/** One email in the list: sender and avatar, subject, a short preview and the date. */
+function EmailRow({ email, selected, lang, onOpen }: { email: EmailItem; selected: boolean; lang: string; onOpen: (id: string) => void }) {
   const avatarUrl = extractAvatarFromBody(email.body);
-  const plainBody = stripHtml(email.body);
-  const actionBtn = detectActionButton(plainBody);
-  const bodyLines = plainBody.split('\n').map((l) => l.trim()).filter(Boolean);
-  const bodyText = bodyLines.filter((l) => l !== actionBtn).join(' ');
-
-  function handleClick() {
-    navigate(`/emails/${email.id}`, { state: { email } });
-  }
-
+  const preview = snippetOf(email.body, detectActionButton(email.body));
+  const date = new Date(email.received_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', { day: 'numeric', month: 'short' });
   return (
-    <article key={email.id} className="email-item" onClick={handleClick} style={{ cursor: 'pointer' }}>
-      <div className="email-item-head">
-        {avatarUrl ? (
-          <img className="email-avatar" src={avatarUrl} alt="" referrerPolicy="no-referrer" />
-        ) : (
-          <span className="email-avatar">{initialsOf(email.from_email)}</span>
-        )}
-        <div className="email-meta">
-          <div className="email-from">{email.from_email}</div>
-          <div className="email-subject">{email.subject}</div>
-          <div className="email-date">
-            {new Date(email.received_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-          </div>
-        </div>
-        {actionBtn && (
-          <button
-            type="button"
-            className="btn btn-primary email-action-btn"
-            onClick={(e) => { e.stopPropagation(); void handleAction(email.id, actionBtn); }}
-          >
-            {actionBtn}
-          </button>
-        )}
-      </div>
-      {bodyText && <p className="email-body">{bodyText}</p>}
-      <button
-        type="button"
-        className="btn btn-ghost btn-sm"
-        onClick={(e) => { e.stopPropagation(); void handleMarkRead(email.id); }}
-        aria-label={t('email.markRead')}
-      >
-        <Icon name="check" size={14} />
-      </button>
-    </article>
+    <button type="button" className={`inbox-row${selected ? ' is-selected' : ''}`} onClick={() => onOpen(email.id)} aria-current={selected ? 'true' : undefined}>
+      <span className="inbox-avatar" aria-hidden="true">
+        {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : initialsOf(email.from_email)}
+      </span>
+      <span className="inbox-row-main">
+        <span className="inbox-row-top">
+          <span className="inbox-from">{email.from_email}</span>
+          <span className="inbox-date">{date}</span>
+        </span>
+        <span className="inbox-subject">{email.subject}</span>
+        {preview && <span className="inbox-snippet">{preview}</span>}
+      </span>
+    </button>
   );
-
-  async function handleAction(id: string, actionText: string) {
-    console.log('Action clicked:', id, actionText);
-  }
-
-  async function handleMarkRead(id: string) {
-    try {
-      await api.post(`/emails/${id}/read`);
-    } catch (err) {
-      console.error('Mark read failed', err);
-    }
-  }
 }
 
 export function EmailInboxPage() {
   const { user } = useAuth();
   const { t, lang } = usePrefs();
+  const navigate = useNavigate();
+  const { id: selectedId } = useParams<{ id?: string }>();
   const [emails, setEmails] = useState<EmailItem[] | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
-
-  if (!user) return null;
 
   useEffect(() => {
     fetchEmails();
@@ -144,8 +45,7 @@ export function EmailInboxPage() {
 
   async function fetchEmails() {
     try {
-      const data = await api.get<EmailItem[]>('/emails');
-      setEmails(data);
+      setEmails(await api.get<EmailItem[]>('/emails'));
     } catch {
       setEmails([]);
     }
@@ -153,7 +53,7 @@ export function EmailInboxPage() {
 
   async function checkGmailStatus() {
     try {
-      const data = await api.get<{ connected: boolean; email: string | null; connectedAt: string | null }>('/email/status');
+      const data = await api.get<{ connected: boolean }>('/email/status');
       setGmailConnected(data.connected);
     } catch {
       setGmailConnected(false);
@@ -166,17 +66,16 @@ export function EmailInboxPage() {
       await api.post('/email/sync');
       await fetchEmails();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sinkronisasi gagal';
-      alert(msg);
+      alert(err instanceof Error ? err.message : 'Sinkronisasi gagal');
     } finally {
       setSyncing(false);
     }
   }
 
-  const list = emails ?? [];
+  if (!user) return null;
 
   return (
-    <div className="page">
+    <div className="page inbox-page">
       <div className="page-header">
         <div>
           <h2>{t('email.title')}</h2>
@@ -195,27 +94,33 @@ export function EmailInboxPage() {
         </div>
       </div>
 
-      <section className="settings-section" aria-labelledby="emails-list">
-        {emails === null && (
-          <div className="card">
-            <SkeletonRows count={3} />
-          </div>
-        )}
-      {emails !== null && emails.length === 0 && (
-        <div className="card">
-          <div className="empty">
-            <p className="empty-title">{t('email.empty')}</p>
-          </div>
-        </div>
-      )}
-      {emails !== null && emails.length > 0 && (
-        <div className="email-grid">
-          {list.map((email) => (
-            <EmailItemCard key={email.id} email={email} t={t} lang={lang} />
-          ))}
-        </div>
-      )}
-      </section>
+      <div className={`inbox${selectedId ? ' has-detail' : ''}`}>
+        <section className="inbox-list" aria-label={t('email.title')}>
+          {emails === null && <SkeletonRows count={6} />}
+          {emails !== null && emails.length === 0 && (
+            <div className="inbox-empty">
+              <p>{t('email.empty')}</p>
+            </div>
+          )}
+          {emails !== null && emails.length > 0 && (
+            <div className="inbox-rows">
+              {emails.map((email) => (
+                <EmailRow key={email.id} email={email} selected={email.id === selectedId} lang={lang} onOpen={(id) => navigate(`/emails/${id}`)} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="inbox-detail" aria-label={t('email.title')}>
+          {selectedId ? (
+            <EmailDetailPane key={selectedId} id={selectedId} onBack={() => navigate('/emails')} />
+          ) : (
+            <div className="inbox-empty">
+              <p>{t('email.pickOne')}</p>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

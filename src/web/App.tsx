@@ -5,7 +5,6 @@
   import { LoginPage } from './pages/LoginPage';
   import { SettingsPage } from './pages/SettingsPage';
   import { EmailInboxPage } from './pages/EmailInboxPage';
-  import { EmailDetailPage } from './pages/EmailDetailPage';
   import { ProfilePage } from './pages/ProfilePage';
   
   export function App() {
@@ -19,7 +18,7 @@
               <Route element={<Layout />}>
                 <Route index element={<Navigate to="/emails" replace />} />
                 <Route path="emails" element={<EmailInboxPage />} />
-                <Route path="emails/:id" element={<EmailDetailPage />} />
+                <Route path="emails/:id" element={<EmailInboxPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>

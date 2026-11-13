@@ -876,6 +876,8 @@ const MESSAGES = {
   'email.connectGmail': { en: 'Connect Gmail', id: 'Hubungkan Gmail' },
   'email.connectedAs': { en: 'Connected as {email}', id: 'Terhubung sebagai {email}' },
   'email.loading': { en: 'Loading emails...', id: 'Memuat email...' },
+  'email.pickOne': { en: 'Select an email to read it here.', id: 'Pilih email untuk membacanya di sini.' },
+  'email.back': { en: 'Back', id: 'Kembali' },
   'email.empty': { en: 'No emails found. Click Sync Gmail to fetch.', id: 'Belum ada email. Klik Sinkronkan Gmail untuk mengambil.' },
   'email.settingsTab': { en: 'Email Sync', id: 'Sinkronisasi Email' },
   'email.settingsTitle': { en: 'Gmail Sync Settings', id: 'Pengaturan Sinkronisasi Gmail' },

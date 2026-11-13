@@ -1,0 +1,184 @@
+/* Inbox: the list on the left and the open email beside it, both in Silpasala's card style.
+   On phones the two take turns: the list, then the email with a back button. */
+
+.inbox {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  height: calc(100dvh - 200px);
+  min-height: 420px;
+}
+
+.inbox-list,
+.inbox-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.inbox-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+}
+
+.inbox-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+
+.inbox-row:hover { background: var(--fill); }
+.inbox-row.is-selected { background: var(--accent-soft); }
+
+.inbox-avatar {
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--fill-strong);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.inbox-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.inbox-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.inbox-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.inbox-from {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-date {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.inbox-subject {
+  overflow: hidden;
+  font-size: var(--text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-snippet {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.inbox-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px;
+  color: var(--muted);
+  font-size: var(--text-md);
+  text-align: center;
+}
+
+.inbox-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 28px;
+}
+
+.inbox-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--separator);
+}
+
+.inbox-detail-head h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.inbox-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+
+.inbox-detail-meta strong {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.inbox-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inbox-back { align-self: flex-start; display: none; }
+
+@media (max-width: 900px) {
+  .inbox {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+  }
+  .inbox .inbox-detail { display: none; }
+  .inbox.has-detail .inbox-list { display: none; }
+  .inbox.has-detail .inbox-detail { display: flex; min-height: calc(100dvh - 200px); }
+  .inbox.has-detail .inbox-back { display: inline-flex; }
+  .inbox-list { overflow: visible; }
+}
+
+/* On phones, an open email takes the whole screen: the inbox heading steps aside. */
+@media (max-width: 900px) {
+  .inbox-page:has(.inbox.has-detail) > .page-header { display: none; }
+}

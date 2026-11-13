@@ -1,140 +1,102 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
 import { api, ApiRequestError } from '../api';
 import { useAuth } from '../auth';
 import { usePrefs } from '../prefs';
 import { Icon } from '../components/Icon';
+import { SkeletonRows } from '../components/Skeleton';
+import { type EmailItem, extractAvatarFromBody, initialsOf, detectActionButton } from '../emailHelpers';
 
-interface EmailItem {
-  id: string;
-  subject: string;
-  from_email: string;
-  to_email: string;
-  body: string;
-  received_at: string;
-  created_at: string;
-}
-
-export function EmailDetailPage() {
+/** The open email, shown in the pane beside the inbox list (full width on phones, with a back button). */
+export function EmailDetailPane({ id, onBack }: { id: string; onBack: () => void }) {
   const { t, lang } = usePrefs();
   const { user } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
   const [email, setEmail] = useState<EmailItem | null>(null);
   const [error, setError] = useState('');
 
-  const urlId = location.pathname.split('/').pop();
-
-  if (!user) return null;
-
   useEffect(() => {
     let cancelled = false;
-
-    async function load() {
+    setEmail(null);
+    setError('');
+    (async () => {
       try {
-        if (!urlId) {
-          setError('Email tidak ditemukan');
-          return;
-        }
-
-        // Ambil langsung dari Gmail API (jangan simpan ke database)
-        // Hanya fetch sekali; jika email sudah ada (dari route state atau fetch sebelumnya),
-        // jangan meminta ulang ke server untuk mencegah request berulang.
-        if (email) return;
-
-        const data = await api.get<EmailItem>(`/emails/${urlId}/full`);
-        if (!cancelled) setEmail(data);
-        void api.post(`/emails/${data.id}/read`).catch(() => {});
+        // Fetched from Gmail for this view; the body is not stored in the database.
+        const data = await api.get<EmailItem>(`/emails/${id}/full`);
+        if (cancelled) return;
+        setEmail(data);
+        void api.post(`/emails/${id}/read`).catch(() => {});
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof ApiRequestError ? err.message : 'Gagal memuat email');
-        }
+        if (!cancelled) setError(err instanceof ApiRequestError ? err.message : 'Gagal memuat email');
       }
-    }
-
-    void load();
+    })();
     return () => {
       cancelled = true;
     };
-  }, [urlId, email]);
+  }, [id]);
 
-  function handleBack() {
-    navigate('/emails');
-  }
+  if (!user) return null;
 
-  if (!email) {
+  if (error) {
     return (
-      <div className="page">
-        <div className="page-header">
-          <div>
-            <h2>{t('email.title')}</h2>
-          </div>
-        </div>
-        {error && <p className="text-danger">{error}</p>}
+      <div className="inbox-detail-body">
+        <button type="button" className="btn btn-ghost btn-sm inbox-back" onClick={onBack}>
+          <Icon name="chevron-left" size={16} />
+          <span>{t('email.back')}</span>
+        </button>
+        <p className="text-danger">{error}</p>
       </div>
     );
   }
 
-  const avatarUrl = (() => {
-    const match = email.body.match(/<img[^>]+src="([^"]+)"/i);
-    return match ? match[1] : null;
-  })();
+  if (!email) {
+    return (
+      <div className="inbox-detail-body">
+        <SkeletonRows count={3} />
+      </div>
+    );
+  }
+
+  const avatarUrl = extractAvatarFromBody(email.body);
+  const action = detectActionButton(email.body);
+  const date = new Date(email.received_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={handleBack}
-            aria-label="Kembali"
-            style={{ marginBottom: '8px' }}
-          >
-            <Icon name="chevron-left" size={16} />
-            <span>Kembali</span>
-          </button>
-          <h2>{email.subject}</h2>
-          <p className="hint">{email.from_email}</p>
-        </div>
+    <article className="inbox-detail-body">
+      <button type="button" className="btn btn-ghost btn-sm inbox-back" onClick={onBack}>
+        <Icon name="chevron-left" size={16} />
+        <span>{t('email.back')}</span>
+      </button>
 
-      </div>
-
-      <section className="settings-section" aria-labelledby="email-detail">
-        <div className="card">
-          <div className="card-body">
-            <div className="email-detail-head">
-              <span className="email-avatar">
-                {avatarUrl ? (
-                  <img className="email-avatar-img" src={avatarUrl} alt="" referrerPolicy="no-referrer" />
-                ) : (
-                  <span className="email-avatar-text">{initialsOf(email.from_email)}</span>
-                )}
-              </span>
-              <div className="email-detail-meta">
-                <div className="email-detail-from">{email.from_email}</div>
-                <div className="email-detail-date">
-                  {new Date(email.received_at).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="email-detail-body" dangerouslySetInnerHTML={{ __html: email.body }} />
+      <header className="inbox-detail-head">
+        <h2>{email.subject}</h2>
+        <div className="inbox-detail-meta">
+          <span className="inbox-avatar" aria-hidden="true">
+            {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : initialsOf(email.from_email)}
+          </span>
+          <div>
+            <strong>{email.from_email}</strong>
+            <span>{date}</span>
           </div>
         </div>
-      </section>
-    </div>
-  );
-}
+        <div className="inbox-detail-actions">
+          {action && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => console.log('Action clicked:', email.id, action)}>
+              {action}
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void api.post(`/emails/${email.id}/read`).catch(() => {})}>
+            <Icon name="check" size={14} />
+            <span>{t('email.markRead')}</span>
+          </button>
+        </div>
+      </header>
 
-function initialsOf(email: string): string {
-  const name = email.split('@')[0];
-  const parts = name.split(/[.\-_]/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
+      <div className="inbox-detail-content email-detail-body" dangerouslySetInnerHTML={{ __html: email.body }} />
+    </article>
+  );
 }
