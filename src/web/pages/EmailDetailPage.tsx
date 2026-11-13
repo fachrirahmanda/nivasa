@@ -3,7 +3,7 @@ import { api, ApiRequestError } from '../api';
 import { useAuth } from '../auth';
 import { usePrefs } from '../prefs';
 import { Icon } from '../components/Icon';
-import { SkeletonRows } from '../components/Skeleton';
+import { SkeletonMailReader } from '../components/Skeleton';
 import { type EmailItem, extractAvatarFromBody, initialsOf, senderAddress, senderName } from '../emailHelpers';
 
 /** The open email, read-only, in the pane beside the list (full width on phones, with a back button). */
@@ -55,7 +55,7 @@ export function EmailDetailPane({ id, onBack }: { id: string; onBack: () => void
     return (
       <div className="mail-reader">
         {back}
-        <SkeletonRows count={3} />
+        <SkeletonMailReader />
       </div>
     );
   }

@@ -275,3 +275,52 @@
   .inbox-list { min-height: calc(100dvh - 40px); }
   .mail-reader { padding: 14px 18px 28px; }
 }
+
+/* ---------- skeletons: the mail list and the reader, drawn like the real rows ---------- */
+
+.skeleton-mail-list { display: flex; flex-direction: column; gap: 2px; padding: 6px; }
+
+.skeleton-mail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 10px;
+}
+
+.skeleton-mail-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.skeleton-mail-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.skeleton-reader {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 28px 32px;
+}
+
+.skeleton-reader-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.skeleton-reader-sender { display: flex; align-items: center; gap: 12px; }
+
+.skeleton-reader-body { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+
+@media (max-width: 900px) {
+  .skeleton-reader { padding: 14px 18px 28px; }
+}

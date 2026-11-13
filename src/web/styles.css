@@ -1040,7 +1040,7 @@ select.input,
   gap: 10px;
 }
 
-.skeleton-form .category-grid .skeleton {
+.skeleton-form .category-grid .bone {
   border-radius: var(--radius-lg);
 }
 

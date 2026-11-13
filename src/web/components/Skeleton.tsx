@@ -2,10 +2,10 @@ import type { CSSProperties, ReactNode } from 'react';
 import { usePrefs } from '../prefs';
 
 // Placeholders that match each screen's layout, so content does not jump when it arrives.
-// Built on Basis's .skeleton shimmer. Screen readers hear one "Loading" status per placeholder.
+// Built on Basis's .bone shimmer. Screen readers hear one "Loading" status per placeholder.
 
-function Bone({ w = '100%', h = 12, r, circle, style }: { w?: number | string; h?: number; r?: number; circle?: boolean; style?: CSSProperties }) {
-  return <span className="bone" style={{ width: w, height: h, borderRadius: circle ? "50%" : r, ...style }} aria-hidden="true" />;
+export function Bone({ w = '100%', h = 12, r, circle, style }: { w?: number | string; h?: number; r?: number; circle?: boolean; style?: CSSProperties }) {
+  return <span className="bone" style={{ width: w, height: h, borderRadius: circle ? '50%' : r, ...style }} aria-hidden="true" />;
 }
 
 function Busy({ children, className }: { children: ReactNode; className?: string }) {
@@ -31,6 +31,51 @@ export function SkeletonRows({ count = 5 }: { count?: number }) {
           <Bone w={64} h={12} />
         </div>
       ))}
+    </Busy>
+  );
+}
+
+/** The mail list while it loads: the same rows as the inbox (avatar, sender and age, subject, preview). */
+export function SkeletonMailList({ count = 7 }: { count?: number }) {
+  return (
+    <Busy className="skeleton-mail-list">
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="skeleton-mail-row">
+          <Bone w={36} h={36} circle />
+          <span className="skeleton-mail-lines">
+            <span className="skeleton-mail-top">
+              <Bone w={`${40 + (i % 3) * 10}%`} h={11} />
+              <Bone w={28} h={10} />
+            </span>
+            <Bone w={`${70 - (i % 2) * 14}%`} h={12} />
+            <Bone w={`${86 - (i % 3) * 12}%`} h={10} />
+          </span>
+        </div>
+      ))}
+    </Busy>
+  );
+}
+
+/** The open mail while it loads: sender row, title, and the body lines. */
+export function SkeletonMailReader() {
+  return (
+    <Busy className="skeleton-reader">
+      <div className="skeleton-reader-head">
+        <span className="skeleton-reader-sender">
+          <Bone w={44} h={44} circle />
+          <span className="skeleton-mail-lines">
+            <Bone w={140} h={12} />
+            <Bone w={220} h={10} />
+          </span>
+        </span>
+        <Bone w={150} h={10} />
+      </div>
+      <Bone w="72%" h={22} />
+      <div className="skeleton-reader-body">
+        {[100, 96, 88, 100, 62, 92, 80].map((w, i) => (
+          <Bone key={i} w={`${w}%`} h={11} />
+        ))}
+      </div>
     </Busy>
   );
 }
@@ -74,7 +119,7 @@ export function SkeletonForm() {
       </div>
       <div className="category-grid">
         {Array.from({ length: 6 }, (_, i) => (
-          <Bone key={i} h={52} />
+          <Bone key={i} h={52} r={12} />
         ))}
       </div>
     </Busy>

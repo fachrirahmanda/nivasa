@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Icon } from '../components/Icon';
-import { SkeletonRows } from '../components/Skeleton';
+import { Bone, SkeletonMailList } from '../components/Skeleton';
 import { usePrefs } from '../prefs';
 import { type EmailItem, extractAvatarFromBody, initialsOf, relativeTime, senderName, snippetOf, stripHtml } from '../emailHelpers';
 import { EmailDetailPane } from './EmailDetailPage';
@@ -46,7 +46,8 @@ export function EmailInboxPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
   const [emails, setEmails] = useState<EmailItem[] | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [gmailConnected, setGmailConnected] = useState(false);
+  // null until the status is known: no 'Connect' button flashes while it loads.
+  const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>('all');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -111,7 +112,9 @@ export function EmailInboxPage() {
                 <button type="button" className={`icon-btn icon-btn-sm${searching ? ' is-on' : ''}`} onClick={() => setSearching((s) => !s)} aria-label="Search" title="Search">
                   <Icon name="search" size={16} />
                 </button>
-                {gmailConnected ? (
+                {gmailConnected === null ? (
+                  <Bone w={96} h={28} r={8} />
+                ) : gmailConnected ? (
                   <button type="button" className="btn btn-ghost btn-sm" onClick={handleSync} disabled={syncing} title={t('email.syncButton')}>
                     <Icon name="retry" size={14} />
                     <span>{syncing ? t('email.syncing') : t('email.syncButton')}</span>
@@ -132,7 +135,7 @@ export function EmailInboxPage() {
             </div>
           </div>
 
-          {emails === null && <SkeletonRows count={6} />}
+          {emails === null && <SkeletonMailList count={7} />}
           {emails !== null && emails.length === 0 && (
             <div className="inbox-empty"><p>{t('email.empty')}</p></div>
           )}

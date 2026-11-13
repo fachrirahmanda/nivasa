@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { SkeletonRows } from './Skeleton';
 import { useLocation, useNavigate } from 'react-router';
 import { api } from '../api';
 import { NOTIFICATIONS_CHANGED } from '../ask';
@@ -262,7 +263,7 @@ export function ActivityList({ onOpen }: { onOpen: (item: ActivityItem) => void 
   }, []);
 
   if (failed) return <p className="text-sm text-muted">{prefs.t('common.error.network')}</p>;
-  if (items === null) return <p className="text-sm text-muted">{prefs.t('common.loading')}</p>;
+  if (items === null) return <SkeletonRows count={3} />;
   if (items.length === 0) return <p className="text-sm text-muted">{prefs.t('activity.empty')}</p>;
   const onKey = (item: ActivityItem) => (event: KeyboardEvent) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;

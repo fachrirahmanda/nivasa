@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Bone } from '../components/Skeleton';
 import { useNavigate } from 'react-router';
 import { api, ApiRequestError } from '../api';
 import { useAuth } from '../auth';
@@ -130,18 +131,20 @@ export function ProfilePage() {
   const { user, setUser, signOut } = useAuth();
   const { state } = useWorkspace();
   const [details, setDetails] = useState<{ createdAt: string; lastLoginAt: string | null } | null>(null);
+  const [detailsFailed, setDetailsFailed] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const role = state?.workspace.role === 'owner' ? t('nav.owner') : t('ws.member');
+  // Until the workspace has loaded the role is unknown: show a placeholder, not a guess.
+  const role = state ? (state.workspace.role === 'owner' ? t('nav.owner') : t('ws.member')) : null;
 
   // Loaded once the page opens: the dates are not part of the signed-in user.
   useEffect(() => {
     api
       .get<{ createdAt: string; lastLoginAt: string | null }>('/profile')
       .then(setDetails)
-      .catch(() => setDetails(null));
+      .catch(() => setDetailsFailed(true));
   }, []);
 
   async function refreshUser(next: User) {
@@ -248,7 +251,7 @@ export function ProfilePage() {
                 {t('presence.active')}
               </span>
             </div>
-            <span className="badge">{user.isAdmin ? t('profile.admin') : role}</span>
+            <span className="badge">{user.isAdmin ? t('profile.admin') : role ?? <Bone w={56} h={12} />}</span>
           </div>
 
           <p className="hint m-0 profile-photo-hint">
@@ -299,11 +302,11 @@ export function ProfilePage() {
           </div>
           <div className="list-row">
             <span className="source-meta">{t('profile.joined')}</span>
-            <span>{details ? date(details.createdAt.slice(0, 10)) : '—'}</span>
+            <span>{details ? date(details.createdAt.slice(0, 10)) : detailsFailed ? '—' : <Bone w={96} h={12} />}</span>
           </div>
           <div className="list-row">
             <span className="source-meta">{t('profile.lastLogin')}</span>
-            <span>{details?.lastLoginAt ? date(details.lastLoginAt.slice(0, 10)) : t('profile.never')}</span>
+            <span>{!details ? (detailsFailed ? '—' : <Bone w={96} h={12} />) : details.lastLoginAt ? date(details.lastLoginAt.slice(0, 10)) : t('profile.never')}</span>
           </div>
         </section>
       )}
