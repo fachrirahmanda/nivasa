@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Select } from './Select';
 
 // Dropdown for the app: a thin wrapper around Select (the Silpasala pattern), with the simple
-// options shape used across Neraca.
+// options shape used across Nivasa.
 
 export interface DropdownOption {
   value: string;

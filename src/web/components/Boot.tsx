@@ -1,6 +1,6 @@
 import { usePrefs } from '../prefs';
 
-/** The Neraca line chart, drawn while the app starts or the session is checked. Same drawing as the preloader
+/** The Nivasa line chart, drawn while the app starts or the session is checked. Same drawing as the preloader
  *  in index.html, and its animation comes from the rules there, so the handover from the first paint to React
  *  is seamless. */
 export function Boot() {

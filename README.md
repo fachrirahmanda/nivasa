@@ -1,6 +1,6 @@
-# Neraca
+# Nivasa
 
-Pencatat pengeluaran pribadi dengan kartu kredit, paylater, tabungan, cicilan, tagihan, laporan, dan data bersama. Satu Worker (`neraca`) melayani aplikasi React dan API `/api/*`, dengan database D1 `neraca`. Stack dan konfigurasinya sama dengan Silpasala (Hono, `@cloudflare/vite-plugin`, Workers Assets). Styling dari Basis design system.
+Pencatat pengeluaran pribadi dengan kartu kredit, paylater, tabungan, cicilan, tagihan, laporan, dan data bersama. Satu Worker (`nivasa`) melayani aplikasi React dan API `/api/*`, dengan database D1 `neraca`. Stack dan konfigurasinya sama dengan Silpasala (Hono, `@cloudflare/vite-plugin`, Workers Assets). Styling dari Basis design system.
 
 ## Setup lokal
 
@@ -19,7 +19,7 @@ Login memakai token client Google Identity Services. Browser mengirim access tok
 
 Di Google Cloud Console, client OAuth tipe **Web application** harus punya origin JavaScript untuk setiap alamat aplikasi:
 - `http://localhost:5173` untuk lokal
-- `https://neraca.itscomen.workers.dev` untuk production
+- URL Worker `nivasa` di Cloudflare (lihat dashboard Workers) untuk production
 
 `GOOGLE_CLIENT_ID` dan `ADMIN_EMAIL` tidak disimpan di repo. Untuk lokal, isi di `.dev.vars`. Untuk production, set sebagai secret (lihat bagian Deploy).
 

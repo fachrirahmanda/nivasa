@@ -23,7 +23,7 @@ const CONTEXT_EXCHANGES = 10;
 const CONTEXT_MINUTES = 60;
 
 const SYSTEM_PROMPT = [
-  'You answer questions about one person’s personal expenses in Neraca, a spending tracker, about how to use Neraca, and about personal finance and calculations.',
+  'You answer questions about one person’s personal expenses in Nivasa, a spending tracker, about how to use Neraca, and about personal finance and calculations.',
   'For their own money, use only the summary you are given and facts the person states in the conversation. You may calculate from them (sums, differences, dates months ahead).',
   'If they do not contain the answer, say so instead of guessing.',
   'For installments, the Installments section is the source of truth: it has the number of months, the installments paid and the last due date.',
@@ -33,9 +33,9 @@ const SYSTEM_PROMPT = [
   'Do not invent transactions, categories or dates.',
 ].join(' ');
 
-/** How Neraca works, so the model can answer "how do I…" and explain how amounts are counted. */
+/** How Nivasa works, so the model can answer "how do I…" and explain how amounts are counted. */
 const APP_GUIDE = [
-  'About Neraca, for questions on how to use the app:',
+  'About Nivasa, for questions on how to use the app:',
   '- Home (Dashboard): this month’s spending and transactions, unpaid credit card spending, what is due next month, running card bills, spending by category and recent transactions.',
   '- Add expense (the + button): amount, date and time, category, note, payment method and source. The form stays open for the next entry. Receipts can be attached and are stored in Google Drive.',
   '- History: every transaction, with edit and delete. Reports: spending per month and per category, and a CSV export.',

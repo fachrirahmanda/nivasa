@@ -228,14 +228,14 @@ export interface WorkspaceMember {
   name: string;
   avatarUrl?: string | null;
   role: 'owner' | 'member';
-  /** When they last had Neraca open, UTC "YYYY-MM-DD HH:MM:SS"; null if not since this was recorded. */
+  /** When they last had Nivasa open, UTC "YYYY-MM-DD HH:MM:SS"; null if not since this was recorded. */
   lastSeenAt?: string | null;
 }
 
 /** Seen in the last minute: their open page checks in every 15 seconds. */
 export const ACTIVE_WITHIN_MS = 60_000;
 
-/** Whether someone last seen at `lastSeenAt` (UTC, from the server) has Neraca open now. */
+/** Whether someone last seen at `lastSeenAt` (UTC, from the server) has Nivasa open now. */
 export function isActive(lastSeenAt: string | null | undefined, now = Date.now()) {
   if (!lastSeenAt) return false;
   return now - new Date(`${lastSeenAt.replace(' ', 'T')}Z`).getTime() < ACTIVE_WITHIN_MS;

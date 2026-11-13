@@ -86,7 +86,7 @@ export function EmailDetailPage() {
         <div>
           <button
             type="button"
-            className="btn btn-primary btn-sm"
+            className="btn btn-ghost btn-sm"
             onClick={handleBack}
             aria-label="Kembali"
             style={{ marginBottom: '8px' }}
