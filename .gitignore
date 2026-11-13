@@ -1,0 +1,9 @@
+node_modules
+dist
+.wrangler
+.dev.vars
+.env.local
+*.tsbuildinfo
+
+# Public Vite values still stay out of git; keep local env files private
+.env

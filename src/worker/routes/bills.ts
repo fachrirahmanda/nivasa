@@ -1,0 +1,207 @@
+import { billPeriodOf, billingOn, closesOn, dueIn, dueOn, periodStartOf, shiftMonth } from '../../shared/billing';
+import { isBilledKind, type OpenBill, type PaidBill, type SourceKind } from '../../shared/types';
+import type { Env } from '../env';
+import type { RouteContext } from '../context';
+import { HttpError, json, readJson } from '../http';
+import { recordActivity } from '../notify';
+import { debitSourceOf } from './sources';
+
+const CHUNK = 50;
+const PAID_LIST_LIMIT = 100;
+
+function isDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+interface SourceRow {
+  id: string;
+  name: string;
+  kind: SourceKind;
+  closing_day: number | null;
+  payment_day: number | null;
+}
+
+/** The open bills of a data set: unpaid credit and paylater purchases, grouped by billing period and source. */
+export async function openBillsOf(env: Env, userId: string): Promise<OpenBill[]> {
+  const { results: sources } = await env.DB.prepare(
+    'SELECT id, name, kind, closing_day, payment_day FROM payment_sources WHERE user_id = ? AND kind IN (?, ?)',
+  )
+    .bind(userId, 'credit_card', 'paylater')
+    .all<SourceRow>();
+
+  const { results: unpaid } = await env.DB.prepare(
+    "SELECT source_id, occurred_on, amount FROM transactions WHERE user_id = ? AND status = 'unpaid' AND source_id IS NOT NULL",
+  )
+    .bind(userId)
+    .all<{ source_id: string; occurred_on: string; amount: number }>();
+
+  // Bills the person set to be paid in the next month, by "source|period".
+  const { results: plans } = await env.DB.prepare('SELECT source_id, period, pay_month FROM bill_plans WHERE user_id = ?')
+    .bind(userId)
+    .all<{ source_id: string; period: string; pay_month: string }>();
+  const movedTo = new Map(plans.map((plan) => [`${plan.source_id}|${plan.period}`, plan.pay_month]));
+
+  const open: OpenBill[] = [];
+  for (const source of sources) {
+    if (!isBilledKind(source.kind) || source.closing_day === null || source.payment_day === null) continue;
+    const byPeriod = new Map<string, { total: number; count: number }>();
+    for (const row of unpaid) {
+      if (row.source_id !== source.id) continue;
+      const period = billPeriodOf(row.occurred_on, source.closing_day);
+      const bill = byPeriod.get(period) ?? { total: 0, count: 0 };
+      bill.total += row.amount;
+      bill.count += 1;
+      byPeriod.set(period, bill);
+    }
+    for (const [period, bill] of byPeriod) {
+      const defaultPayMonth = dueOn(period, source.closing_day, source.payment_day).slice(0, 7);
+      const payMonth = movedTo.get(`${source.id}|${period}`) ?? defaultPayMonth;
+      open.push({
+        sourceId: source.id,
+        sourceName: source.name,
+        kind: source.kind,
+        period,
+        fromOn: periodStartOf(period, source.closing_day),
+        closesOn: closesOn(period, source.closing_day),
+        billingOn: billingOn(period, source.closing_day),
+        payMonth,
+        moved: payMonth !== defaultPayMonth,
+        dueOn: dueIn(payMonth, source.payment_day),
+        total: bill.total,
+        count: bill.count,
+      });
+    }
+  }
+  open.sort((a, b) => a.dueOn.localeCompare(b.dueOn));
+  return open;
+}
+
+/** GET /api/bills: open bills (unpaid, by period and source) and the paid bill history. */
+export async function listBills({ env, userId }: RouteContext) {
+  const open = await openBillsOf(env, userId);
+
+  const { results: paidRows } = await env.DB.prepare(
+    `SELECT b.id, b.source_id, s.name AS source_name, b.period, b.total, b.transaction_count, b.paid_on, f.name AS paid_from_name
+     FROM card_bills b JOIN payment_sources s ON s.id = b.source_id LEFT JOIN payment_sources f ON f.id = b.paid_from_id
+     WHERE b.user_id = ? ORDER BY b.paid_on DESC, b.period DESC LIMIT ${PAID_LIST_LIMIT}`,
+  )
+    .bind(userId)
+    .all<{ id: string; source_id: string; source_name: string; period: string; total: number; transaction_count: number; paid_on: string; paid_from_name: string | null }>();
+
+  const paid: PaidBill[] = paidRows.map((row) => ({
+    id: row.id,
+    sourceId: row.source_id,
+    sourceName: row.source_name,
+    period: row.period,
+    total: row.total,
+    count: row.transaction_count,
+    paidOn: row.paid_on,
+    paidFromName: row.paid_from_name,
+  }));
+
+  return json({ open, paid });
+}
+
+/**
+ * POST /api/bills/pay { sourceId, period, paidOn, paidFromId? }: marks the open bill as paid. Its unpaid
+ * transactions count as spending on the payment date, and the bill is kept as paid history. With
+ * paidFromId (a savings account), the bill's total comes off that account's balance.
+ */
+export async function payBill({ request, env, userId, actorId }: RouteContext) {
+  const body = await readJson(request);
+  if (typeof body.sourceId !== 'string') throw new HttpError(400, 'Pilih kartu kredit atau paylater');
+  if (typeof body.period !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(body.period)) throw new HttpError(400, 'Periode tagihan tidak valid');
+  if (!isDate(body.paidOn)) throw new HttpError(400, 'Tanggal pelunasan tidak valid');
+  const period = body.period;
+  const paidOn = body.paidOn;
+
+  const source = await env.DB.prepare('SELECT id, name, kind, closing_day FROM payment_sources WHERE id = ? AND user_id = ?')
+    .bind(body.sourceId, userId)
+    .first<{ id: string; name: string; kind: SourceKind; closing_day: number | null }>();
+  if (!source || !isBilledKind(source.kind) || source.closing_day === null) throw new HttpError(400, 'Pilih kartu kredit atau paylater');
+
+  const { results: unpaid } = await env.DB.prepare(
+    "SELECT id, occurred_on, amount FROM transactions WHERE user_id = ? AND source_id = ? AND status = 'unpaid'",
+  )
+    .bind(userId, source.id)
+    .all<{ id: string; occurred_on: string; amount: number }>();
+  const inBill = unpaid.filter((row) => billPeriodOf(row.occurred_on, source.closing_day!) === period);
+  if (inBill.length === 0) throw new HttpError(400, 'Tidak ada tagihan yang belum lunas untuk periode ini');
+
+  const total = inBill.reduce((sum, row) => sum + row.amount, 0);
+  const paidFrom = body.paidFromId ? await debitSourceOf(env.DB, userId, body.paidFromId, total) : null;
+  const billId = crypto.randomUUID();
+
+  const statements = [
+    // Paid now: the bill no longer has a month to move.
+    env.DB.prepare('DELETE FROM bill_plans WHERE source_id = ? AND period = ?').bind(source.id, period),
+    env.DB.prepare('INSERT INTO card_bills (id, user_id, source_id, period, total, transaction_count, paid_on, paid_from_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(
+      billId,
+      userId,
+      source.id,
+      period,
+      total,
+      inBill.length,
+      paidOn,
+      paidFrom?.id ?? null,
+    ),
+  ];
+  for (let i = 0; i < inBill.length; i += CHUNK) {
+    const ids = inBill.slice(i, i + CHUNK).map((row) => row.id);
+    statements.push(
+      env.DB.prepare(
+        `UPDATE transactions SET status = 'posted', posted_on = ?, updated_at = datetime('now')
+         WHERE user_id = ? AND id IN (${ids.map(() => '?').join(', ')})`,
+      ).bind(paidOn, userId, ...ids),
+    );
+  }
+
+  try {
+    await env.DB.batch(statements);
+  } catch (error) {
+    if (String(error).includes('UNIQUE')) throw new HttpError(409, 'Tagihan ini sudah dilunasi');
+    throw error;
+  }
+
+  const sourceRow = await env.DB.prepare('SELECT name FROM payment_sources WHERE id = ?').bind(source.id).first<{ name: string }>();
+  const bill: PaidBill = {
+    id: billId,
+    sourceId: source.id,
+    sourceName: sourceRow?.name ?? '',
+    period,
+    total,
+    count: inBill.length,
+    paidOn,
+    paidFromName: paidFrom?.name ?? null,
+  };
+  await recordActivity(env, userId, actorId, 'bill_paid', { source: source.name, amount: total });
+  return json({ bill }, 201);
+}
+
+/**
+ * PUT /api/bills/plan { sourceId, period, later }: pays an open bill in the next month (later), or in the month it is
+ * due (not later). Only the months that were moved are stored.
+ */
+export async function setBillPlan({ request, env, userId }: RouteContext) {
+  const body = await readJson(request);
+  if (typeof body.sourceId !== 'string') throw new HttpError(400, 'Pilih kartu kredit atau paylater');
+  if (typeof body.period !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(body.period)) throw new HttpError(400, 'Periode tagihan tidak valid');
+  if (typeof body.later !== 'boolean') throw new HttpError(400, 'Pilih bulan pembayaran');
+
+  const source = await env.DB.prepare('SELECT kind, closing_day, payment_day FROM payment_sources WHERE id = ? AND user_id = ?')
+    .bind(body.sourceId, userId)
+    .first<{ kind: SourceKind; closing_day: number | null; payment_day: number | null }>();
+  if (!source || !isBilledKind(source.kind) || source.closing_day === null || source.payment_day === null) throw new HttpError(400, 'Pilih kartu kredit atau paylater');
+
+  if (body.later) {
+    const payMonth = shiftMonth(dueOn(body.period, source.closing_day, source.payment_day).slice(0, 7), 1);
+    await env.DB.prepare('INSERT OR REPLACE INTO bill_plans (user_id, source_id, period, pay_month) VALUES (?, ?, ?, ?)')
+      .bind(userId, body.sourceId, body.period, payMonth)
+      .run();
+  } else {
+    await env.DB.prepare('DELETE FROM bill_plans WHERE source_id = ? AND period = ? AND user_id = ?').bind(body.sourceId, body.period, userId).run();
+  }
+  return json({ ok: true });
+}

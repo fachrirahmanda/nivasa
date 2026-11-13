@@ -1,0 +1,27 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "nivasa",
+	"main": "src/worker/index.ts",
+	"compatibility_date": "2026-10-01",
+	// React app built by Vite; unknown paths fall back to index.html for client-side routing.
+	// /api/* always reaches the Worker first.
+	"assets": {
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "nivasa",
+			"database_id": "8c30825f-b8bc-4b3d-b4e4-7287924fd31f",
+			"migrations_dir": "migrations"
+		}
+	],
+	// Secrets and account values are not in this file. Set them with `wrangler secret put` (see README).
+	"observability": {
+		"enabled": true
+	},
+}

@@ -1,0 +1,9 @@
+SESSION_SECRET=ganti-dengan-string-acak-panjang
+# Uncomment for local development only: signs in without Google on localhost. Never set in production.
+# DEV_LOGIN=true
+SETTINGS_KEY=ganti-dengan-string-acak-lain
+# Google OAuth client (Google Cloud Console > Credentials > OAuth client, Web application).
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+# The one account that is the admin (connects Google Drive for receipts, manages Ask AI).
+ADMIN_EMAIL=
