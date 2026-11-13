@@ -198,7 +198,6 @@
 
 .mail-row.is-selected {
   background: var(--accent-soft);
-  box-shadow: inset 3px 0 0 var(--accent-fill);
 }
 
 /* Avatar: a soft tint per sender (--h is set from the address), initials or the photo. */
