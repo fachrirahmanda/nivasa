@@ -78,17 +78,21 @@ export function EmailInboxPage() {
   const [tab, setTab] = useState<Tab>('all');
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     fetchEmails();
     checkGmailStatus();
   }, []);
 
+  // A failed load says so, and keeps the mail already on screen: it is not shown as an empty inbox.
   async function fetchEmails() {
     try {
       setEmails(await api.get<EmailItem[]>('/emails'));
+      setLoadFailed(false);
     } catch {
-      setEmails([]);
+      setLoadFailed(true);
+      setEmails((prev) => prev ?? []);
     }
   }
 
@@ -181,7 +185,13 @@ export function EmailInboxPage() {
           </header>
 
           {emails === null && <SkeletonMailList count={7} />}
-          {emails !== null && emails.length === 0 && (
+          {loadFailed && (
+            <div className="inbox-error" role="alert">
+              <p>{t('email.loadFailed')}</p>
+              <button type="button" className="inbox-sync" onClick={() => void fetchEmails()}>{t('email.retry')}</button>
+            </div>
+          )}
+          {emails !== null && emails.length === 0 && !loadFailed && (
             <div className="inbox-empty">
               <span className="inbox-empty-icon" aria-hidden="true"><Icon name="mail" size={22} /></span>
               <p>{t('email.empty')}</p>

@@ -154,6 +154,19 @@
   text-align: center;
 }
 
+.inbox-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-md);
+}
+
 /* ---------- rows, in day groups ---------- */
 
 .inbox-rows {

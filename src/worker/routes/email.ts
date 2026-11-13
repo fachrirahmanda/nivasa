@@ -1,6 +1,15 @@
 ﻿import { HttpError, json, readJson } from '../http';
 import type { RouteContext } from '../context';
 
+/** A call to Google. A dropped connection becomes a clear message, not an unhandled error. */
+async function googleFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new HttpError(502, 'Tidak bisa terhubung ke Google. Coba lagi sebentar.');
+  }
+}
+
 function redirect(location: string): Response {
   return new Response(null, { status: 302, headers: { location } });
 }
@@ -51,7 +60,7 @@ async function getAccessToken(env: RouteContext['env']): Promise<string> {
   const expired = !token || (row.token_expires_at && new Date(row.token_expires_at) < new Date());
 
   if (expired) {
-    const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
+    const refreshRes = await googleFetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -162,7 +171,7 @@ export async function emailCallback({ request, env }: RouteContext) {
 
   const redirectUri = `${new URL(request.url).origin}/api/email/callback`;
 
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+  const tokenRes = await googleFetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -181,7 +190,7 @@ export async function emailCallback({ request, env }: RouteContext) {
     expires_in: number;
   };
 
-  const profileRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
+  const profileRes = await googleFetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
     headers: { authorization: `Bearer ${tokens.access_token}` },
   });
   if (!profileRes.ok) return redirect('/settings?tab=gmail&email=failed');
@@ -251,7 +260,7 @@ export async function getEmail({ env, params }: RouteContext) {
 export async function getEmailFull({ env, params }: RouteContext) {
   const token = await getAccessToken(env);
 
-  const msgRes = await fetch(
+  const msgRes = await googleFetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages/${params.id}?format=full`,
     { headers: { authorization: `Bearer ${token}` } }
   );
@@ -301,10 +310,10 @@ export async function emailSync({ env }: RouteContext) {
   const searchUrl = `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(
     'subject:"Penting: Cara memperbarui Rumah dengan Akun Netflix-mu"'
   )}&maxResults=50`;
-  const searchRes = await fetch(searchUrl, {
+  const searchRes = await googleFetch(searchUrl, {
     headers: { authorization: `Bearer ${token}` },
   });
-  if (!searchRes.ok) return json({ emailsCount: 0 });
+  if (!searchRes.ok) throw new HttpError(502, 'Gmail menolak permintaan sinkronisasi. Coba hubungkan ulang Gmail di Settings.');
 
   const searchData = (await searchRes.json()) as { messages?: { id: string }[] };
   const messages = searchData.messages ?? [];
@@ -314,7 +323,7 @@ export async function emailSync({ env }: RouteContext) {
     const existing = await env.DB.prepare('SELECT id FROM emails WHERE id = ?').bind(msg.id).first();
     if (existing) continue;
 
-    const msgRes = await fetch(
+    const msgRes = await googleFetch(
       `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
       { headers: { authorization: `Bearer ${token}` } }
     );
