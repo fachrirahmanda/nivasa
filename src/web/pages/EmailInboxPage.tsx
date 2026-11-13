@@ -5,11 +5,22 @@ import { useAuth } from '../auth';
 import { Icon } from '../components/Icon';
 import { Bone, SkeletonMailList } from '../components/Skeleton';
 import { usePrefs } from '../prefs';
-import { type EmailItem, extractAvatarFromBody, initialsOf, relativeTime, senderName, snippetOf, stripHtml } from '../emailHelpers';
+import { type EmailItem, extractAvatarFromBody, initialsOf, relativeTime, senderName, snippetOf } from '../emailHelpers';
 import { EmailDetailPane } from './EmailDetailPage';
 
 type Tab = 'all' | 'unread';
 type Bucket = 'today' | 'yesterday' | 'week' | 'older';
+
+const PAGE_SIZE = 20;
+
+interface EmailPage {
+  items: EmailItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+  unreadTotal: number;
+}
 
 /** Which day group a mail belongs to, for the list headings. */
 function bucketOf(iso: string, now = Date.now()): Bucket {
@@ -71,35 +82,65 @@ export function EmailInboxPage() {
   const { t, lang } = usePrefs();
   const navigate = useNavigate();
   const { id: selectedId } = useParams<{ id?: string }>();
-  const [emails, setEmails] = useState<EmailItem[] | null>(null);
+  // The page of mail on screen. null until the first page arrives.
+  const [data, setData] = useState<EmailPage | null>(null);
+  const [page, setPage] = useState(1);
+  const [tab, setTab] = useState<Tab>('all');
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [syncing, setSyncing] = useState(false);
   // null until the status is known: no 'Connect' button flashes while it loads.
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<Tab>('all');
-  const [query, setQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Typing in search waits a moment, then asks the server; every new search starts again at page 1.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
-    fetchEmails();
+    setPage(1);
+  }, [tab]);
+
+  useEffect(() => {
     checkGmailStatus();
   }, []);
 
-  // A failed load says so, and keeps the mail already on screen: it is not shown as an empty inbox.
-  async function fetchEmails() {
-    try {
-      setEmails(await api.get<EmailItem[]>('/emails'));
-      setLoadFailed(false);
-    } catch {
-      setLoadFailed(true);
-      setEmails((prev) => prev ?? []);
-    }
-  }
+  // Loads the page asked for. The page on screen stays until the next one is ready.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const qs = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE), tab });
+    if (debouncedQuery) qs.set('q', debouncedQuery);
+    api
+      .get<EmailPage>(`/emails?${qs.toString()}`)
+      .then((res) => {
+        if (cancelled) return;
+        setData(res);
+        setLoadFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page, tab, debouncedQuery, reloadKey]);
 
   async function checkGmailStatus() {
     try {
-      const data = await api.get<{ connected: boolean }>('/email/status');
-      setGmailConnected(data.connected);
+      const status = await api.get<{ connected: boolean }>('/email/status');
+      setGmailConnected(status.connected);
     } catch {
       setGmailConnected(false);
     }
@@ -109,7 +150,7 @@ export function EmailInboxPage() {
     setSyncing(true);
     try {
       await api.post('/email/sync');
-      await fetchEmails();
+      setReloadKey((k) => k + 1);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Sinkronisasi gagal');
     } finally {
@@ -117,29 +158,23 @@ export function EmailInboxPage() {
     }
   }
 
-  const unreadCount = (emails ?? []).filter((e) => !e.read_at).length;
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const unreadCount = data?.unreadTotal ?? 0;
+  const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // Filter by tab, then by the search text (sender, subject, or the body).
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return (emails ?? []).filter((e) => {
-      if (tab === 'unread' && e.read_at) return false;
-      if (!q) return true;
-      return `${e.from_email} ${e.subject} ${stripHtml(e.body)}`.toLowerCase().includes(q);
-    });
-  }, [emails, tab, query]);
-
-  // The list in day groups, newest first, each with its heading.
+  // The page of mail in day groups, newest first, each with its heading.
   const groups = useMemo(() => {
     const order: Bucket[] = ['today', 'yesterday', 'week', 'older'];
-    return order
-      .map((b) => ({ bucket: b, items: visible.filter((e) => bucketOf(e.received_at) === b) }))
-      .filter((g) => g.items.length > 0);
-  }, [visible]);
+    return order.map((b) => ({ bucket: b, items: items.filter((e) => bucketOf(e.received_at) === b) })).filter((g) => g.items.length > 0);
+  }, [items]);
 
   if (!user) return null;
 
   const label = (b: Bucket) => (lang === 'id' ? BUCKET_LABEL[b].id : BUCKET_LABEL[b].en);
+  const pageLabel = lang === 'id' ? `${from}–${to} dari ${total}` : `${from}–${to} of ${total}`;
 
   return (
     <div className={`inbox-page${selectedId ? ' has-detail' : ''}`}>
@@ -184,27 +219,24 @@ export function EmailInboxPage() {
             </div>
           </header>
 
-          {emails === null && <SkeletonMailList count={7} />}
           {loadFailed && (
             <div className="inbox-error" role="alert">
               <p>{t('email.loadFailed')}</p>
-              <button type="button" className="inbox-sync" onClick={() => void fetchEmails()}>{t('email.retry')}</button>
+              <button type="button" className="inbox-sync" onClick={() => setReloadKey((k) => k + 1)}>{t('email.retry')}</button>
             </div>
           )}
-          {emails !== null && emails.length === 0 && !loadFailed && (
+
+          {data === null && !loadFailed && <SkeletonMailList count={7} />}
+
+          {data !== null && total === 0 && !loadFailed && (
             <div className="inbox-empty">
-              <span className="inbox-empty-icon" aria-hidden="true"><Icon name="mail" size={22} /></span>
-              <p>{t('email.empty')}</p>
+              <span className="inbox-empty-icon" aria-hidden="true"><Icon name={debouncedQuery || tab === 'unread' ? 'search' : 'mail'} size={22} /></span>
+              <p>{debouncedQuery ? 'No emails match.' : tab === 'unread' ? 'No unread emails.' : t('email.empty')}</p>
             </div>
           )}
-          {emails !== null && emails.length > 0 && visible.length === 0 && (
-            <div className="inbox-empty">
-              <span className="inbox-empty-icon" aria-hidden="true"><Icon name={tab === 'unread' ? 'check' : 'search'} size={22} /></span>
-              <p>{tab === 'unread' ? 'No unread emails.' : 'No emails match.'}</p>
-            </div>
-          )}
-          {groups.length > 0 && (
-            <div className="inbox-rows">
+
+          {items.length > 0 && (
+            <div className="inbox-rows" aria-busy={loading}>
               {groups.map((g) => (
                 <div key={g.bucket} className="inbox-group">
                   <p className="inbox-group-label">{label(g.bucket)}</p>
@@ -214,6 +246,18 @@ export function EmailInboxPage() {
                 </div>
               ))}
             </div>
+          )}
+
+          {total > 0 && (
+            <nav className="inbox-pager" aria-label="Pages">
+              <button type="button" className="icon-btn icon-btn-sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading} aria-label="Previous page" title="Previous page">
+                <Icon name="chevron-left" size={16} />
+              </button>
+              <span className="inbox-pager-label">{pageLabel}</span>
+              <button type="button" className="icon-btn icon-btn-sm" onClick={() => setPage((p) => Math.min(lastPage, p + 1))} disabled={page >= lastPage || loading} aria-label="Next page" title="Next page">
+                <Icon name="chevron-right" size={16} />
+              </button>
+            </nav>
           )}
         </section>
 

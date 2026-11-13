@@ -219,21 +219,60 @@ export async function emailCallback({ request, env }: RouteContext) {
 }
 
 /** GET /api/emails — daftar email inbox. */
-export async function listEmails({ env }: RouteContext) {
-  const emails = await env.DB.prepare(
-    'SELECT id, subject, from_email, to_email, body, received_at, created_at, read_at FROM emails ORDER BY received_at DESC LIMIT 50'
-  ).all<{
-    id: string;
-    subject: string;
-    from_email: string;
-    to_email: string;
-    body: string;
-    received_at: string;
-    created_at: string;
-    read_at: string | null;
-  }>();
+/**
+ * GET /api/emails?page=&pageSize=&tab=all|unread&q= — one page of the inbox, newest first.
+ * `total` counts the mail that matches the tab and search; `unreadTotal` is the unread count for the tab badge.
+ */
+export async function listEmails({ env, request }: RouteContext) {
+  const url = new URL(request.url);
+  const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get('pageSize')) || 20));
+  const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+  const unreadOnly = url.searchParams.get('tab') === 'unread';
+  const q = (url.searchParams.get('q') ?? '').trim().slice(0, 200);
 
-  return json(emails.results ?? []);
+  const where: string[] = [];
+  const binds: (string | number)[] = [];
+  if (unreadOnly) where.push('read_at IS NULL');
+  if (q) {
+    const like = `%${q.replace(/[\\%_]/g, (ch) => '\\' + ch)}%`;
+    where.push("(subject LIKE ? ESCAPE '\\' OR from_email LIKE ? ESCAPE '\\')");
+    binds.push(like, like);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  // One extra row tells us whether there is a next page without a second query for it.
+  const rows = await env.DB.prepare(
+    `SELECT id, subject, from_email, to_email, body, received_at, created_at, read_at FROM emails ${whereSql} ORDER BY received_at DESC LIMIT ? OFFSET ?`
+  )
+    .bind(...binds, pageSize + 1, (page - 1) * pageSize)
+    .all<{
+      id: string;
+      subject: string;
+      from_email: string;
+      to_email: string;
+      body: string;
+      received_at: string;
+      created_at: string;
+      read_at: string | null;
+    }>();
+
+  const totals = await env.DB.prepare(
+    `SELECT COUNT(*) AS total, SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread FROM emails ${whereSql}`
+  )
+    .bind(...binds)
+    .first<{ total: number; unread: number | null }>();
+
+  const all = await env.DB.prepare('SELECT COUNT(*) AS unread FROM emails WHERE read_at IS NULL').first<{ unread: number }>();
+
+  const results = rows.results ?? [];
+  return json({
+    items: results.slice(0, pageSize),
+    page,
+    pageSize,
+    total: totals?.total ?? 0,
+    hasMore: results.length > pageSize,
+    unreadTotal: all?.unread ?? 0,
+  });
 }
 
 /** GET /api/emails/:id — detail satu email. */
