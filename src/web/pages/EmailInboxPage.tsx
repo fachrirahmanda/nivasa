@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { Icon } from '../components/Icon';
+import { MailIllustration } from '../components/MailIllustration';
 import { Bone, SkeletonMailList } from '../components/Skeleton';
 import { usePrefs } from '../prefs';
-import { type EmailItem, extractAvatarFromBody, initialsOf, relativeTime, senderName, stripHtml } from '../emailHelpers';
-import { EmailDetailPane } from './EmailDetailPage';
+import { type EmailListItem, initialsOf, relativeTime, senderName, stripHtml } from '../emailHelpers';
 
 type Tab = 'all' | 'unread';
 type Bucket = 'today' | 'yesterday' | 'week' | 'older';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
 interface EmailPage {
-  items: EmailItem[];
+  items: EmailListItem[];
   page: number;
   pageSize: number;
   total: number;
   hasMore: boolean;
   unreadTotal: number;
+  devices: { name: string; count: number }[];
 }
 
 /** Which day group a mail belongs to, for the list headings. */
@@ -49,40 +50,75 @@ function hueOf(text: string): number {
 }
 
 /** One mail in the list: colour avatar, sender and age, subject, and a one-line preview. Unread mail is bold, with a dot. */
-function EmailRow({ email, selected, lang, onOpen }: { email: EmailItem; selected: boolean; lang: string; onOpen: (id: string) => void }) {
-  const avatarUrl = extractAvatarFromBody(email.body);
+/** How long the request link stays valid, in milliseconds. */
+const LINK_LIFETIME_MS = 15 * 60_000;
+
+function EmailRow({ email, lang, now, onOpen }: { email: EmailListItem; lang: string; now: number; onOpen: (id: string) => void }) {
+  const { t } = usePrefs();
+  // The picture comes from the sync, so the list reads no mail bodies.
+  const avatarUrl = email.avatar_url || null;
   // The preview is the start of the mail as Gmail gives it, e.g. "Diminta oleh FR dari Apple TV pada 14 November…".
   const preview = stripHtml(email.snippet ?? '').replace(/\s+/g, ' ').trim();
   const unread = !email.read_at;
-  const name = senderName(email.from_email);
+  const name = email.sender_name || senderName(email.from_email);
+  // The request link works for 15 minutes after the mail arrives: the button counts down, then shows it has expired.
+  const left = LINK_LIFETIME_MS - (now - new Date(email.received_at).getTime());
+  const expired = left <= 0;
+  const leftLabel = left >= 60_000 ? t('list.linkLeft', { count: Math.ceil(left / 60_000) }) : t('list.linkUnderMinute');
   return (
-    <button
-      type="button"
-      className={`mail-row${selected ? ' is-selected' : ''}${unread ? ' is-unread' : ''}`}
-      onClick={() => onOpen(email.id)}
-      aria-current={selected ? 'true' : undefined}
-    >
-      <span className="mail-avatar" style={{ ['--h' as string]: hueOf(email.from_email) }} aria-hidden="true">
-        {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : initialsOf(email.from_email)}
-      </span>
-      <span className="mail-row-main">
-        <span className="mail-row-top">
-          <span className="mail-from">{name}</span>
-          <span className="mail-age">{relativeTime(email.received_at, lang)}</span>
+    <div className={`mail-item${unread ? ' is-unread' : ''}`}>
+      <button
+        type="button"
+        className={`mail-row${unread ? ' is-unread' : ''}`}
+        onClick={() => onOpen(email.id)}
+      >
+        <span className="mail-avatar" style={{ ['--h' as string]: hueOf(email.from_email) }} aria-hidden="true">
+          {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : initialsOf(email.from_email)}
         </span>
-        <span className="mail-subject">{email.subject || '(no subject)'}</span>
-        {preview && <span className="mail-preview">{preview}</span>}
-      </span>
-      {unread && <span className="mail-dot" aria-label="Unread" />}
-    </button>
+        <span className="mail-row-main">
+          <span className="mail-row-top">
+            <span className="mail-from">{name}</span>
+            <span className="mail-when">
+              <span className="mail-age">{relativeTime(email.received_at, lang)}</span>
+            </span>
+          </span>
+          <span className="mail-subject">{email.request_title || email.subject || t('list.noSubject')}</span>
+          {email.intro && <span className="mail-intro">{email.intro}</span>}
+        </span>
+      </button>
+      {/* The bottom of the card: the start of the mail on the left, the request card's own button on the right.
+          The button opens the link in a new tab and marks the mail read. */}
+      {(preview || email.action_url) && (
+        <div className="mail-foot">
+          {preview && <span className="mail-preview">{preview}</span>}
+          {email.action_url && expired && (
+            <span className="mail-action is-expired" aria-disabled="true">
+              {lang === 'id' ? 'Kedaluwarsa' : 'Expired'}
+            </span>
+          )}
+          {email.action_url && !expired && (
+            <a
+              className="mail-action"
+              href={email.action_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => onOpen(email.id)}
+            >
+              Ya, Itu Saya
+              <span className="mail-action-time">· {leftLabel}</span>
+            </a>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
-export function EmailInboxPage() {
+/** The Requests list (mail still in the list), or the Archive (mail older than the archive schedule). */
+export function EmailInboxPage({ view = 'active' }: { view?: 'active' | 'archived' }) {
+  const archived = view === 'archived';
   const { user } = useAuth();
   const { t, lang } = usePrefs();
-  const navigate = useNavigate();
-  const { id: selectedId } = useParams<{ id?: string }>();
   // The page of mail on screen. null until the first page arrives.
   const [data, setData] = useState<EmailPage | null>(null);
   const [page, setPage] = useState(1);
@@ -96,6 +132,15 @@ export function EmailInboxPage() {
   // null until the status is known: no 'Connect' button flashes while it loads.
   const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // A device can come from the Devices page: ?device=… opens the list already filtered.
+  const [searchParams] = useSearchParams();
+  const [device, setDevice] = useState(searchParams.get('device') ?? '');
+  // The clock for the link countdowns: ticks every 30 seconds.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Typing in search waits a moment, then asks the server; every new search starts again at page 1.
   useEffect(() => {
@@ -114,12 +159,21 @@ export function EmailInboxPage() {
     checkGmailStatus();
   }, []);
 
+  // Once the Gmail status is known and connected, sync when the page opens.
+  useEffect(() => {
+    if (gmailConnected && !archived) void syncInBackground();
+    // Only when the status arrives: the page syncs on each visit, not on every change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gmailConnected]);
+
   // Loads the page asked for. The page on screen stays until the next one is ready.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const qs = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE), tab });
     if (debouncedQuery) qs.set('q', debouncedQuery);
+    if (device) qs.set('device', device);
+    if (archived) qs.set('view', 'archived');
     api
       .get<EmailPage>(`/emails?${qs.toString()}`)
       .then((res) => {
@@ -136,7 +190,7 @@ export function EmailInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, tab, debouncedQuery, reloadKey]);
+  }, [page, tab, debouncedQuery, device, reloadKey, archived]);
 
   async function checkGmailStatus() {
     try {
@@ -159,6 +213,34 @@ export function EmailInboxPage() {
     }
   }
 
+  // Opening the page syncs once, quietly: a failed sync keeps the mail already on screen.
+  async function syncInBackground() {
+    setSyncing(true);
+    try {
+      await api.post('/email/sync');
+      setReloadKey((k) => k + 1);
+    } catch {
+      // The list stays as it is; the Sync button still reports errors.
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  // Opening a mail marks it read: the row loses its dot at once, and the server is told.
+  function handleOpen(id: string) {
+    const email = data?.items.find((e) => e.id === id);
+    if (!email || email.read_at) return;
+    const now = new Date().toISOString();
+    setData((prev) =>
+      prev && {
+        ...prev,
+        unreadTotal: Math.max(0, prev.unreadTotal - 1),
+        items: prev.items.map((e) => (e.id === id ? { ...e, read_at: now } : e)),
+      },
+    );
+    api.post(`/emails/${id}/read`).catch(() => setReloadKey((k) => k + 1));
+  }
+
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const unreadCount = data?.unreadTotal ?? 0;
@@ -178,28 +260,29 @@ export function EmailInboxPage() {
   const pageLabel = lang === 'id' ? `${from}–${to} dari ${total}` : `${from}–${to} of ${total}`;
 
   return (
-    <div className={`inbox-page${selectedId ? ' has-detail' : ''}`}>
-      <div className={`inbox${selectedId ? ' has-detail' : ''}`}>
-        <section className="inbox-list" aria-label={t('email.title')}>
+    <div className="inbox-page">
+      <div className="inbox">
+        <section className="inbox-list" aria-label={archived ? t('list.archivedTitle') : t('list.title')}>
           <header className="inbox-list-head">
             <div className="inbox-list-top">
               <div>
-                <h2>{t('email.title')}</h2>
-                <p>{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}</p>
+                <h2>{archived ? t('list.archivedTitle') : t('list.title')}</h2>
+                <p>{unreadCount > 0 ? t('list.unread', { count: unreadCount }) : t('list.allRead')}</p>
               </div>
               <div className="inbox-list-tools">
-                <button type="button" className={`icon-btn icon-btn-sm${searching ? ' is-on' : ''}`} onClick={() => setSearching((s) => !s)} aria-label="Search" aria-expanded={searching} title="Search">
+                <button type="button" className={`icon-btn icon-btn-sm${searching ? ' is-on' : ''}`} onClick={() => setSearching((s) => !s)} aria-label={t('list.search')} aria-expanded={searching} title={t('list.search')}>
                   <Icon name="search" size={16} />
                 </button>
-                {gmailConnected === null ? (
+                {/* Sync belongs to the Requests list; the Archive only shows older mail. */}
+                {archived ? null : gmailConnected === null ? (
                   <Bone w={96} h={28} r={8} />
                 ) : gmailConnected ? (
-                  <button type="button" className="inbox-sync" onClick={handleSync} disabled={syncing} title={t('email.syncButton')}>
+                  <button type="button" className="inbox-sync" onClick={handleSync} disabled={syncing} title={t('list.sync')}>
                     <Icon name="retry" size={14} />
-                    <span>{syncing ? t('email.syncing') : t('email.syncButton')}</span>
+                    <span>{syncing ? t('list.syncing') : t('list.sync')}</span>
                   </button>
                 ) : (
-                  <a href="/settings?tab=gmail" className="inbox-sync">{t('email.connectGmail')}</a>
+                  user.isAdmin ? <a href="/settings?tab=gmail" className="inbox-sync">{t('email.connectGmail')}</a> : null
                 )}
               </div>
             </div>
@@ -207,11 +290,24 @@ export function EmailInboxPage() {
             {searching && (
               <label className="inbox-search">
                 <Icon name="search" size={15} />
-                <input type="search" placeholder="Search emails" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search emails" autoFocus />
+                <input type="search" placeholder={t('list.search')} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t('list.search')} autoFocus />
               </label>
             )}
 
-            <div className="inbox-segment" role="tablist" aria-label={t('email.title')}>
+            {data && data.devices.length > 0 && (
+              <div className="inbox-chips" role="group" aria-label={t('list.devices')}>
+                <button type="button" className="inbox-chip" aria-pressed={device === ''} onClick={() => { setDevice(''); setPage(1); }}>
+                  {t('list.allDevices')}
+                </button>
+                {data.devices.map((d) => (
+                  <button key={d.name} type="button" className="inbox-chip" aria-pressed={device === d.name} onClick={() => { setDevice(d.name); setPage(1); }}>
+                    {d.name} <span className="inbox-chip-count">{d.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="inbox-segment" role="tablist" aria-label={t('list.title')}>
               <button type="button" role="tab" aria-selected={tab === 'all'} onClick={() => setTab('all')}>All</button>
               <button type="button" role="tab" aria-selected={tab === 'unread'} onClick={() => setTab('unread')}>
                 Unread
@@ -222,7 +318,7 @@ export function EmailInboxPage() {
 
           {loadFailed && (
             <div className="inbox-error" role="alert">
-              <p>{t('email.loadFailed')}</p>
+              <p>{t('list.loadFailed')}</p>
               <button type="button" className="inbox-sync" onClick={() => setReloadKey((k) => k + 1)}>{t('email.retry')}</button>
             </div>
           )}
@@ -231,8 +327,8 @@ export function EmailInboxPage() {
 
           {data !== null && total === 0 && !loadFailed && (
             <div className="inbox-empty">
-              <span className="inbox-empty-icon" aria-hidden="true"><Icon name={debouncedQuery || tab === 'unread' ? 'search' : 'mail'} size={22} /></span>
-              <p>{debouncedQuery ? 'No emails match.' : tab === 'unread' ? 'No unread emails.' : t('email.empty')}</p>
+              <MailIllustration />
+              <p>{debouncedQuery ? t('list.noMatch') : tab === 'unread' ? t('list.noUnread') : archived ? t('list.emptyArchived') : t('list.empty')}</p>
             </div>
           )}
 
@@ -242,7 +338,7 @@ export function EmailInboxPage() {
                 <div key={g.bucket} className="inbox-group">
                   <p className="inbox-group-label">{label(g.bucket)}</p>
                   {g.items.map((email) => (
-                    <EmailRow key={email.id} email={email} selected={email.id === selectedId} lang={lang} onOpen={(id) => navigate(`/emails/${id}`)} />
+                    <EmailRow key={email.id} email={email} lang={lang} now={now} onOpen={handleOpen} />
                   ))}
                 </div>
               ))}
@@ -259,17 +355,6 @@ export function EmailInboxPage() {
                 <Icon name="chevron-right" size={16} />
               </button>
             </nav>
-          )}
-        </section>
-
-        <section className="inbox-detail" aria-label={t('email.title')}>
-          {selectedId ? (
-            <EmailDetailPane key={selectedId} id={selectedId} onBack={() => navigate('/emails')} />
-          ) : (
-            <div className="inbox-empty">
-              <span className="inbox-empty-icon" aria-hidden="true"><Icon name="mail" size={22} /></span>
-              <p>{t('email.pickOne')}</p>
-            </div>
           )}
         </section>
       </div>

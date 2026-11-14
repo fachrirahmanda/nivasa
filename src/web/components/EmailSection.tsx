@@ -31,6 +31,10 @@ export function EmailSection() {
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncedCount, setSyncedCount] = useState<number | null>(null);
+  // How many days a mail stays in the Requests list before it moves to the Archive (0: never). null until loaded.
+  const [archiveDays, setArchiveDays] = useState<number | null>(null);
+  const [archiveChoices, setArchiveChoices] = useState<number[]>([]);
+  const [resetDone, setResetDone] = useState(false);
   const result = params.get('email');
 
   async function load() {
@@ -45,6 +49,13 @@ export function EmailSection() {
 
   useEffect(() => {
     void load();
+    api
+      .get<{ archiveAfterDays: number; choices: number[] }>('/email/archive')
+      .then((res) => {
+        setArchiveDays(res.archiveAfterDays);
+        setArchiveChoices(res.choices);
+      })
+      .catch(() => {});
   }, []);
 
   // The connect flow comes back here with ?email=…; show the result once, then drop it from the URL.
@@ -86,6 +97,32 @@ export function EmailSection() {
       load();
     } catch (requestError) {
       setError(requestError instanceof ApiRequestError ? requestError.message : t('email.connectFailed'));
+    }
+  }
+
+  // Admin only (the server checks too): deletes every synced mail. Gmail stays connected, and a sync brings mail back.
+  async function handleReset() {
+    if (!confirm(t('email.confirmReset'))) return;
+    setError('');
+    setResetDone(false);
+    try {
+      await api.post('/email/reset');
+      setSyncedCount(null);
+      setResetDone(true);
+    } catch (requestError) {
+      setError(requestError instanceof ApiRequestError ? requestError.message : t('email.syncFailed'));
+    }
+  }
+
+  async function handleArchive(days: number) {
+    const previous = archiveDays;
+    setArchiveDays(days);
+    setError('');
+    try {
+      await api.put('/email/archive', { archiveAfterDays: days });
+    } catch (requestError) {
+      setArchiveDays(previous);
+      setError(requestError instanceof ApiRequestError ? requestError.message : t('email.syncFailed'));
     }
   }
 
@@ -141,8 +178,23 @@ export function EmailSection() {
 
       {error && <p className="text-danger">{error}</p>}
       {result && RESULTS[result] && <p className="text-sm text-muted">{t(RESULTS[result])}</p>}
+      {resetDone && <p className="hint">{t('email.resetDone')}</p>}
       {syncedCount !== null && result !== 'connected' && (
         <p className="hint">{t('email.synced', { count: syncedCount })}</p>
+      )}
+
+      {archiveDays !== null && (
+        <div className="archive-schedule">
+          <p className="m-0"><strong>{t('email.archiveTitle')}</strong></p>
+          <p className="text-muted text-sm m-0">{t('email.archiveHint')}</p>
+          <div className="inbox-chips" role="group" aria-label={t('email.archiveTitle')}>
+            {archiveChoices.map((days) => (
+              <button key={days} type="button" className="inbox-chip" aria-pressed={archiveDays === days} onClick={() => void handleArchive(days)}>
+                {days === 0 ? t('email.archiveNever') : t('email.archiveDays', { count: days })}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="cluster">
@@ -163,6 +215,9 @@ export function EmailSection() {
             </a>
           </>
         )}
+        <button type="button" className="btn btn-danger-soft" onClick={() => void handleReset()}>
+          {t('email.reset')}
+        </button>
       </div>
     </section>
   );

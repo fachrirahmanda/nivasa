@@ -7,12 +7,13 @@ import { usePrefs } from '../prefs';
 export function SettingsPage() {
   const { t } = usePrefs();
   const [params, setParams] = useSearchParams();
-  useAuth();
+  const { user } = useAuth();
   const requested = params.get('tab') ?? 'workspace';
 
+  // Gmail is the admin's: members do not see that tab.
   const tabs = [
     { id: 'workspace', label: t('settings.tabWorkspace') },
-    { id: 'gmail', label: t('settings.tabGmail') },
+    ...(user?.isAdmin ? [{ id: 'gmail', label: t('settings.tabGmail') }] : []),
   ];
   const tab = tabs.some((item) => item.id === requested) ? requested : 'workspace';
   const setTab = (id: string) => setParams({ tab: id }, { replace: true });

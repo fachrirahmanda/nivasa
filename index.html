@@ -26,30 +26,27 @@
       } catch {}
     </script>
     <style>
-      /* Preloader: the Nivasa line chart, drawn from left to right while the app starts. Inline so it paints first;
-         the page colour follows the theme so a dark page never flashes white. React replaces it. */
-      html { background: #fafafa; }
-      @media (prefers-color-scheme: dark) { html:not([data-theme='light']) { background: #000; } }
-      html[data-theme='dark'] { background: #000; }
+      /* Preloader: the Nivasa icon (the family in a TV) while the app starts. Inline so it paints first; the page
+         colour follows the theme so a dark page never flashes white. React replaces it. Boot.tsx draws the same icon
+         and uses these rules too, so the hand-over is seamless. */
+      html { background: #f5f0e6; }
+      @media (prefers-color-scheme: dark) { html:not([data-theme='light']) { background: #2a1a12; } }
+      html[data-theme='dark'] { background: #2a1a12; }
       .boot { position: fixed; inset: 0; display: grid; place-items: center; animation: boot-in 0.3s ease 0.15s both; }
-      .boot svg { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 8px 28px rgb(0 0 0 / 0.18); }
-      /* One 2.2s loop: the line draws up to the top, the dot pops in with a ripple, then the line runs off
-         ahead and the dot fades, ready to draw again. Boot.tsx draws the same SVG and uses these rules too. */
-      .boot svg { animation: boot-breathe 2.2s ease-in-out infinite; }
-      .boot .trend { stroke-dasharray: 100; stroke-dashoffset: 100; animation: boot-draw 2.2s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
-      .boot .dot, .boot .ripple { transform-box: fill-box; transform-origin: center; opacity: 0; }
-      .boot .dot { animation: boot-dot 2.2s ease-out infinite; }
-      .boot .ripple { animation: boot-ripple 2.2s ease-out infinite; }
-      @keyframes boot-draw { 0% { stroke-dashoffset: 100; } 42%, 72% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; } }
-      @keyframes boot-dot { 0%, 38% { opacity: 0; transform: scale(0); } 48% { opacity: 1; transform: scale(1.35); } 56%, 80% { opacity: 1; transform: scale(1); } 96%, 100% { opacity: 0; transform: scale(0.6); } }
-      @keyframes boot-ripple { 0%, 44% { opacity: 0; transform: scale(1); } 48% { opacity: 0.7; } 80%, 100% { opacity: 0; transform: scale(2.6); } }
-      @keyframes boot-breathe { 0%, 100% { transform: scale(1); } 48% { transform: scale(1.04); } }
+      .boot svg { width: 56px; height: 56px; border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / 0.18); }
+      /* One 1.2s loop: the two people take turns bobbing, the screen glows, and the heart beats between them. */
+      .boot .boot-person { animation: boot-bob 1.2s ease-in-out infinite; }
+      .boot .boot-person-2 { animation-delay: 0.6s; }
+      .boot .boot-screen { animation: boot-glow 1.2s ease-in-out infinite; }
+      .boot .boot-heart { transform-box: fill-box; transform-origin: center; animation: boot-heart 1.2s ease-in-out infinite; }
       @keyframes boot-in { from { opacity: 0; transform: scale(0.94); } }
-
+      @keyframes boot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+      @keyframes boot-glow { 0%, 100% { fill-opacity: 0.06; } 50% { fill-opacity: 0.22; } }
+      @keyframes boot-heart { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+      @keyframes boot-pulse { 50% { opacity: 0.55; } }
       @media (prefers-reduced-motion: reduce) {
-        .boot svg, .boot .trend, .boot .dot, .boot .ripple { animation: none; }
-        .boot .trend { stroke-dashoffset: 0; }
-        .boot .dot { opacity: 1; }
+        .boot .boot-person, .boot .boot-screen, .boot .boot-heart { animation: none; }
+        .boot svg { animation: boot-pulse 1.6s ease-in-out infinite; }
       }
     </style>
   </head>
@@ -57,13 +54,18 @@
     <div id="root">
       <div class="boot" role="status" aria-label="Loading Nivasa">
         <svg viewBox="0 0 32 32" aria-hidden="true">
-          <defs><linearGradient id="boot-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a2a" /><stop offset="1" stop-color="#050505" /></linearGradient></defs>
-          <rect width="32" height="32" rx="8" fill="url(#boot-g)" />
-          <rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="none" stroke="#fff" stroke-opacity=".14" />
-          <path class="trend" pathLength="100" d="M6 22.5 L11.5 16.5 L16.5 19.5 L26 9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
-          <circle class="ripple" cx="26" cy="9" r="2.4" fill="none" stroke="#fff" stroke-width="1" />
-          <circle class="dot" cx="26" cy="9" r="2.4" fill="#fff" />
-        </svg>
+        <defs><linearGradient id="boot-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d2a20" /><stop offset="1" stop-color="#2a1a12" /></linearGradient></defs>
+        <rect width="32" height="32" rx="8" fill="url(#boot-g)" />
+        <rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="none" stroke="#fff" stroke-opacity=".14" />
+        <rect x="3.5" y="5" width="25" height="18" rx="3.5" fill="none" stroke="#f5f0e6" stroke-width="2" />
+        <rect class="boot-screen" x="6" y="7.5" width="20" height="13" rx="1.5" fill="#f5f0e6" fill-opacity=".08" />
+        <path d="M12 23v3.5M20 23v3.5M9 26.5h14" fill="none" stroke="#f5f0e6" stroke-width="2" stroke-linecap="round" />
+        <g transform="translate(8 6) scale(0.5)">
+          <g class="boot-person boot-person-1"><circle cx="9.5" cy="12" r="3" fill="#f5f0e6" /><path d="M3.5 25V21.5Q3.5 16.5 8 16.5H11Q15.5 16.5 15.5 21.5V25Z" fill="#f5f0e6" /></g>
+          <g class="boot-person boot-person-2"><circle cx="22.5" cy="12" r="3" fill="#f5f0e6" /><path d="M16.5 25V21.5Q16.5 16.5 21 16.5H24Q28.5 16.5 28.5 21.5V25Z" fill="#f5f0e6" /></g>
+          <path class="boot-heart" d="M16 13.2c-.9-1.6-3.6-1.2-3.6.9 0 1.6 3.6 3.6 3.6 3.6s3.6-2 3.6-3.6c0-2.1-2.7-2.5-3.6-.9z" fill="#ff5f1f" />
+        </g>
+      </svg>
       </div>
     </div>
     <script type="module" src="/src/web/main.tsx"></script>

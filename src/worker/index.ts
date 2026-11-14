@@ -23,7 +23,7 @@ import { createCategory, deleteCategory, listCategories, updateCategory } from '
 import { createTransaction, deleteTransaction, getTransaction, listTransactions, updateTransaction } from './routes/transactions';
 import { listActivity } from './routes/activity';
 import { createSplitBill, deleteSplitBill, getSplitBill, listSplitBills, recordSplitBill, scanInvoice, unrecordSplitBill, updateSplitBill } from './routes/splitbill';
-import { emailStatus, emailConnect, emailCallback, emailDisconnect, emailSync, listEmails, markEmailRead, getEmail, getEmailFull } from './routes/email';
+import { emailStatus, emailConnect, emailCallback, emailDisconnect, emailReset, emailSync, emailDevices, getArchiveSchedule, saveArchiveSchedule, listEmails, markEmailRead } from './routes/email';
 
 // API. The React app is served from Workers Assets; only /api/* reaches this Worker.
 // Each route keeps its handler; `auth` routes need a session and get the data owner's id.
@@ -132,9 +132,11 @@ const routes: [Method, string, boolean, Handler][] = [
   ['GET', '/email/callback', false, emailCallback],
   ['POST', '/email/disconnect', true, emailDisconnect],
   ['POST', '/email/sync', true, emailSync],
+  ['POST', '/email/reset', true, emailReset],
   ['GET', '/emails', true, listEmails],
-  ['GET', '/emails/:id', true, getEmail],
-  ['GET', '/emails/:id/full', true, getEmailFull],
+  ['GET', '/emails/devices', true, emailDevices],
+  ['GET', '/email/archive', true, getArchiveSchedule],
+  ['PUT', '/email/archive', true, saveArchiveSchedule],
   ['POST', '/emails/:id/read', true, markEmailRead],
 ];
 

@@ -56,30 +56,6 @@ export function SkeletonMailList({ count = 7 }: { count?: number }) {
   );
 }
 
-/** The open mail while it loads: sender row, title, and the body lines. */
-export function SkeletonMailReader() {
-  return (
-    <Busy className="skeleton-reader">
-      <div className="skeleton-reader-head">
-        <span className="skeleton-reader-sender">
-          <Bone w={44} h={44} circle />
-          <span className="skeleton-mail-lines">
-            <Bone w={140} h={12} />
-            <Bone w={220} h={10} />
-          </span>
-        </span>
-        <Bone w={150} h={10} />
-      </div>
-      <Bone w="72%" h={22} />
-      <div className="skeleton-reader-body">
-        {[100, 96, 88, 100, 62, 92, 80].map((w, i) => (
-          <Bone key={i} w={`${w}%`} h={11} />
-        ))}
-      </div>
-    </Busy>
-  );
-}
-
 /** Dashboard placeholder: three stat cards, then two panels. */
 export function SkeletonDashboard() {
   return (

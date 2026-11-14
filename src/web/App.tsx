@@ -5,6 +5,7 @@
   import { LoginPage } from './pages/LoginPage';
   import { SettingsPage } from './pages/SettingsPage';
   import { EmailInboxPage } from './pages/EmailInboxPage';
+    import { DevicesPage } from './pages/DevicesPage';
   import { ProfilePage } from './pages/ProfilePage';
   
   export function App() {
@@ -18,7 +19,8 @@
               <Route element={<Layout />}>
                 <Route index element={<Navigate to="/emails" replace />} />
                 <Route path="emails" element={<EmailInboxPage />} />
-                <Route path="emails/:id" element={<EmailInboxPage />} />
+                <Route path="archived" element={<EmailInboxPage view="archived" />} />
+                <Route path="devices" element={<DevicesPage />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>

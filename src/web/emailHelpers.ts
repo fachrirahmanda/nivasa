@@ -11,7 +11,20 @@ export interface EmailItem {
   read_at?: string | null;
   /** The start of the mail text from Gmail: the list's preview. */
   snippet?: string | null;
+  /** The sender's picture, taken during sync. Empty or null when the mail has none. */
+  avatar_url?: string | null;
+  /** The person named in the request sentence, shown as the sender in the list. Empty when there is none. */
+  sender_name?: string | null;
+  /** The list title for a request mail: "Diminta dari <device>". Empty when there is none, then the subject is shown. */
+  request_title?: string | null;
+  /** The link of the request card's button ("Ya, Itu Saya"), shown on the list row. Empty when there is none. */
+  action_url?: string | null;
+  /** The sentence under the mail's title ("Kami menerima permintaan …"). Empty when there is none. */
+  intro?: string | null;
 }
+
+/** A mail as the list receives it: without the body, which the list does not load. */
+export type EmailListItem = Omit<EmailItem, 'body'>;
 
 export function initialsOf(email: string): string {
   const name = email.split('@')[0];

@@ -1,9 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../auth';
-import { api } from '../api';
-import { formatDate } from '../format';
-import type { AppNotification } from '../../shared/types';
 import type { MessageKey } from '../i18n';
 import { useWorkspace } from '../data';
 import { usePrefs } from '../prefs';
@@ -11,9 +8,15 @@ import { ThemeSwitch } from './ThemeSwitch';
 import { Icon } from './Icon';
 import { UserMenu } from './UserMenu';
 import { Dialog } from './Dialog';
-import { ActivityList, NotificationList, activityLink, initialsOf, linkOf } from './Notifications';
 import { SideSlotContext, usePhone } from './SidePanel';
 import { AddPanel, type AddKind } from './AddPanel';
+
+/** Two letters for an avatar without a picture: from the name, or the start of the email address. */
+function initialsOf(name: string, email: string): string {
+  const source = name.trim() || email.split('@')[0];
+  const parts = source.split(/[s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
+}
 
 const ICON = {
   dashboard: <Icon name="home" size={18} />,
@@ -25,6 +28,9 @@ const ICON = {
   recurring: <Icon name="sprint" size={18} />,
   reports: <Icon name="chart" size={18} />,
   settings: <Icon name="settings" size={18} />,
+  profile: <Icon name="user" size={18} />,
+  archive: <Icon name="folder" size={18} />,
+  devices: <Icon name="storage" size={18} />,
   ask: <Icon name="comment" size={18} />,
   budgets: <Icon name="target" size={18} />,
   loans: <Icon name="coins" size={18} />,
@@ -50,7 +56,10 @@ const BOTTOM_PATHS = ['/dashboard', '/reports', '/add', '/transactions'];
 
 const TABS: Tab[] = [
   { to: '/emails', label: 'nav.inbox', icon: ICON.mail, group: 'home', primary: true },
+  { to: '/archived', label: 'nav.archived', icon: ICON.archive, group: 'home', primary: false },
+  { to: '/devices', label: 'nav.devices', icon: ICON.devices, group: 'home', primary: false },
   { to: '/settings', label: 'nav.settings', icon: ICON.settings, group: 'account', primary: true },
+  { to: '/profile', label: 'nav.profile', icon: ICON.profile, group: 'account', primary: false },
 ];
 
 const GROUP_LABELS: Record<Tab['group'], MessageKey> = {
@@ -65,11 +74,10 @@ const COLLAPSED_KEY = 'neraca.sidebar';
 
 export function Layout() {
   const { user, signOut } = useAuth();
-  const { t, lang } = usePrefs();
+  const { t } = usePrefs();
   const navigate = useNavigate();
-  const { state, reload } = useWorkspace();
+  const { state } = useWorkspace();
   const invitations = state?.invitations ?? [];
-  const notifications: AppNotification[] = [];
   const [more, setMore] = useState(false);
   const [drawer, setDrawer] = useState(false);
   // The bottom bar's Add: a popup on phones, with the tab for the kind of thing to add last used.
@@ -79,9 +87,6 @@ export function Layout() {
   const [addUsed, setAddUsed] = useState(false);
   const [addKind, setAddKind] = useState<AddKind>('expense');
   const [account, setAccount] = useState(false);
-  const [notices, setNotices] = useState(false);
-  // The bell's panel: notifications for this person, or everyone's activity in the data set.
-  const [noticeTab, setNoticeTab] = useState<'notifications' | 'activity'>('notifications');
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSED_KEY) === 'collapsed';
@@ -105,17 +110,6 @@ export function Layout() {
     });
   }
 
-  // Accepting or declining an invitation: accepting switches the data set, so the page reloads.
-  async function respond(id: string, action: 'accept' | 'decline') {
-    try {
-      await api.post(`/workspace/invites/${id}/${action}`);
-    } catch {
-      return;
-    }
-    if (action === 'accept') window.location.reload();
-    else await reload();
-  }
-
   // The phone bar: Home, Reports, Add (in the middle), Transactions, and More for everything else.
   const primaryTabs = BOTTOM_PATHS.map((path) => TABS.find((tab) => tab.to === path)).filter((tab): tab is Tab => tab !== undefined);
   const moreTabs = TABS.filter((tab) => !BOTTOM_PATHS.includes(tab.to));
@@ -130,19 +124,6 @@ export function Layout() {
             <span className="sidebar-text">Nivasa</span>
           </NavLink>
           <div className="sidebar-head-actions">
-            {/* Notifications on desktop; on phones the bell is in the top bar. */}
-            <button
-              type="button"
-              className="icon-btn icon-btn-sm icon-btn-plain notif-btn"
-              onClick={() => {
-                setNotices(true);
-              }}
-              aria-label={t('nav.notifications')}
-              title={t('nav.notifications')}
-            >
-              <Icon name="bell" size={16} />
-              {invitations.length > 0 && <span className="notif-count">{invitations.length}</span>}
-            </button>
             <button type="button" className="icon-btn icon-btn-sm icon-btn-plain sidebar-close" onClick={() => setDrawer(false)} aria-label={t('nav.menu')} title={t('nav.menu')}>
               <Icon name="sidebar-close" size={16} />
             </button>
@@ -193,18 +174,6 @@ export function Layout() {
           <img src="/favicon.svg" alt="" width="26" height="26" />
           <span>Nivasa</span>
         </NavLink>
-        <button
-          type="button"
-          className="icon-btn icon-btn-plain notif-btn"
-          onClick={() => {
-            setNotices(true);
-          }}
-          aria-label={t('nav.notifications')}
-          title={t('nav.notifications')}
-        >
-          <Icon name="bell" size={18} />
-          {invitations.length > 0 && <span className="notif-count">{invitations.length}</span>}
-        </button>
         {user && (
           <button type="button" className="mobile-avatar" onClick={() => setAccount(true)} aria-label={t('nav.account')}>
             <span className="avatar avatar-sm" aria-hidden="true">
@@ -247,56 +216,6 @@ export function Layout() {
             {t('nav.signOut')}
           </button>
         </nav>
-      </Dialog>
-
-      <Dialog open={notices} onClose={() => setNotices(false)} title={t('nav.notifications')} className="notif-drawer">
-        <div className="tabs notif-tabs" role="tablist" aria-label={t('nav.notifications')}>
-          <button type="button" role="tab" className="tab" aria-selected={noticeTab === 'notifications'} onClick={() => setNoticeTab('notifications')}>
-            {t('notif.tabNotifications')}
-          </button>
-          <button type="button" role="tab" className="tab" aria-selected={noticeTab === 'activity'} onClick={() => setNoticeTab('activity')}>
-            {t('notif.tabActivity')}
-          </button>
-        </div>
-        {noticeTab === 'activity' ? (
-          <ActivityList
-            onOpen={(item) => {
-              setNotices(false);
-              navigate(activityLink(item));
-            }}
-          />
-        ) : invitations.length === 0 && notifications.length === 0 ? (
-          <p className="text-sm text-muted">{t('nav.noNotifications')}</p>
-        ) : (
-          <>
-            {invitations.length > 0 && (
-              <div className="ds-notif-list">
-                {invitations.map((invitation) => (
-                  <div key={invitation.id} className="ds-notif-item is-new">
-                    <span className="avatar avatar-sm" aria-hidden="true">{initialsOf(invitation.ownerName, invitation.ownerEmail)}</span>
-                    <div className="ds-notif-body">
-                      <span className="ds-notif-text">{t('ws.banner', { owner: invitation.ownerName || invitation.ownerEmail })}</span>
-                      <span className="ds-notif-meta">{t('ws.invitedOn', { date: formatDate(invitation.createdAt.slice(0, 10), lang) })}</span>
-                      <div className="row-actions">
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => void respond(invitation.id, 'decline')}>{t('ws.decline')}</button>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => void respond(invitation.id, 'accept')}>{t('ws.accept')}</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {notifications.length > 0 && (
-              <NotificationList
-                items={notifications}
-                onOpen={(item) => {
-                  setNotices(false);
-                  navigate(linkOf(item));
-                }}
-              />
-            )}
-          </>
-        )}
       </Dialog>
 
       {phone && addUsed && <AddPanel open={adding} onClose={() => setAdding(false)} kind={addKind} onKindChange={setAddKind} onSaved={() => setAdding(false)} />}
