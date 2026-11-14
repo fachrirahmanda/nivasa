@@ -24,7 +24,7 @@ export async function devLogin({ request, env }: RouteContext) {
 
   const user = await upsertUser(env.DB, { sub: `dev:${email}`, email, name: email.split('@')[0] });
   const token = await signSession(env, user.id);
-  return json({ user }, 200, { 'Set-Cookie': sessionCookie(token) });
+  return json({ user: await withAdmin(env, user) }, 200, { 'Set-Cookie': sessionCookie(token) });
 }
 
 /** POST /api/auth/login { username, password }: signs in with a username and password. */
@@ -63,7 +63,7 @@ export async function loginWithPassword({ request, env }: RouteContext) {
   const token = await signSession(env, userId);
   const user = await getUser(env.DB, userId);
   if (!user) throw new HttpError(401, 'Belum masuk');
-  return json({ user }, 200, { 'Set-Cookie': sessionCookie(token) });
+  return json({ user: await withAdmin(env, user) }, 200, { 'Set-Cookie': sessionCookie(token) });
 }
 
 /** POST /api/auth/register { username, email, name, password }: creates a new account with username + password. */
@@ -80,7 +80,7 @@ export async function registerWithPassword({ request, env }: RouteContext) {
   try {
     const user = await createUserWithPassword(env.DB, username, email, name, password);
     const token = await signSession(env, user.id);
-    return json({ user }, 200, { 'Set-Cookie': sessionCookie(token) });
+    return json({ user: await withAdmin(env, user) }, 200, { 'Set-Cookie': sessionCookie(token) });
   } catch (error) {
     if (error instanceof Error && error.message === 'Username already taken') {
       throw new HttpError(400, 'Username sudah digunakan');
@@ -183,6 +183,11 @@ export async function googleCallback({ request, env }: RouteContext) {
   const user = await upsertUser(env.DB, { sub: profile.sub, email: profile.email, name: profile.name ?? '', picture: profile.picture });
   const token = await signSession(env, user.id);
   return redirect('/dashboard', [clear, sessionCookie(token)]);
+}
+
+/** The user with whether they are the admin, so the page knows at once after signing in. */
+async function withAdmin(env: RouteContext['env'], user: { id: string }) {
+  return { ...user, isAdmin: await isAdmin(env, user.id) };
 }
 
 /** GET /api/auth/me */

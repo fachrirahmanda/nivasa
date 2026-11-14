@@ -1,7 +1,7 @@
 import type { Env } from './env';
 import { base64urlToBytes, base64urlToText, bytesToBase64url } from './base64url';
 
-export const SESSION_COOKIE = 'neraca_session';
+export const SESSION_COOKIE = 'nivasa_session';
 const SESSION_SECONDS = 60 * 60 * 24 * 30;
 
 interface SessionPayload {
