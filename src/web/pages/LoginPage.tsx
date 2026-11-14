@@ -8,16 +8,16 @@ import type { User } from '../../shared/types';
 
 const HIGHLIGHTS: { title: string; text: string }[] = [
   {
-    title: 'Sinkronkan email Gmail',
-    text: 'Gunakan fitur "Sync Gmail" untuk mengambil email penting.',
+    title: 'Sinkronkan email',
+    text: 'Ambil permintaan update Rumah dari email dengan sekali sync.',
   },
   {
-    title: 'Dapatkan email penting',
-    text: 'Email dengan subjek \"Penting: Cara memperbarui Rumah dengan Akun Netflix-mu\" akan ditampilkan di daftar inbox.',
+    title: 'Konfirmasi langsung',
+    text: 'Setujui permintaan langsung dari daftar, cukup satu ketukan.',
   },
   {
     title: 'Tandai sebagai dibaca',
-    text: 'Tandai email sebagai dibaca setelah Anda membacanya.',
+    text: 'Tandai permintaan sebagai dibaca setelah Anda memeriksanya.',
   },
 ];
 
