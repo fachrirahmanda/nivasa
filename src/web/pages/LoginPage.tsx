@@ -9,7 +9,7 @@ import type { User } from '../../shared/types';
 const HIGHLIGHTS: { title: string; text: string }[] = [
   {
     title: 'Sinkronkan email',
-    text: 'Ambil permintaan update Rumah dari email dengan sekali sync.',
+    text: 'Ambil permintaan Rumah dari email dengan sekali sync.',
   },
   {
     title: 'Konfirmasi langsung',
