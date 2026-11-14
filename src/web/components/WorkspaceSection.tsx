@@ -1,11 +1,59 @@
 import { useState, type FormEvent } from 'react';
 import { api, ApiRequestError } from '../api';
+import { useAuth } from '../auth';
 import { useWorkspace } from '../data';
 import { usePrefs } from '../prefs';
 import { formatDate, localeOf } from '../format';
 import { isActive } from '../../shared/types';
 import { Icon } from './Icon';
 import { SkeletonSettingsCard } from './Skeleton';
+
+/** The admin creates an account for a member: username, email, name and a password. The owner then invites
+ *  that email from the same tab, and the member signs in with the username and password. */
+function CreateMemberCard() {
+  const { t } = usePrefs();
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '' });
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage('');
+    setError('');
+    setSaving(true);
+    try {
+      await api.post('/members', form);
+      setMessage(t('members.created', { username: form.username }));
+      setForm({ name: '', username: '', email: '', password: '' });
+    } catch (requestError) {
+      setError(requestError instanceof ApiRequestError ? requestError.message : t('members.createFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: event.target.value });
+  const ready = form.name && form.username && form.email && form.password;
+
+  return (
+    <div className="card ws-card">
+      <div className="ws-card-head">
+        <h4 className="m-0">{t('members.createTitle')}</h4>
+        <p className="hint m-0">{t('members.createHint')}</p>
+      </div>
+      <form className="ws-invite" onSubmit={(event) => void create(event)} noValidate>
+        <input className="input grow" value={form.name} onChange={set('name')} placeholder={t('members.fieldName')} aria-label={t('members.fieldName')} required />
+        <input className="input grow" value={form.username} onChange={set('username')} placeholder={t('members.fieldUsername')} aria-label={t('members.fieldUsername')} required />
+        <input className="input grow" type="email" value={form.email} onChange={set('email')} placeholder={t('members.fieldEmail')} aria-label={t('members.fieldEmail')} required />
+        <input className="input grow" type="password" value={form.password} onChange={set('password')} placeholder={t('members.fieldPassword')} aria-label={t('members.fieldPassword')} required />
+        <button type="submit" className="btn btn-primary" disabled={saving || !ready}>{t('members.createButton')}</button>
+      </form>
+      {message && <p className="text-sm m-0">{message}</p>}
+      {error && <p className="text-danger text-sm m-0" role="alert">{error}</p>}
+    </div>
+  );
+}
 
 /** "Active now" with a green dot, or when they were last active ("Active 5 minutes ago"). */
 function Presence({ lastSeenAt }: { lastSeenAt?: string | null }) {
@@ -51,7 +99,9 @@ function PersonAvatar({ name, email, avatarUrl, size = 40 }: { name: string; ema
 }
 
 /** Settings section: the shared data set, its members, invitations sent, and invitations received. */
-export function WorkspaceSection() {
+/** view: 'data' is your data and pending invitations; 'members' is who is in it and inviting people. */
+export function WorkspaceSection({ view = 'data' }: { view?: 'data' | 'members' }) {
+  const { user } = useAuth();
   const { t, lang } = usePrefs();
   const { state, reload, failed } = useWorkspace();
   const [error, setError] = useState('');
@@ -93,8 +143,8 @@ export function WorkspaceSection() {
   return (
     <section className="settings-section ws" aria-labelledby="settings-workspace">
       <div className="settings-section-head">
-        <h3 id="settings-workspace">{t('ws.title')}</h3>
-        <p className="hint">{t('ws.subtitle')}</p>
+        <h3 id="settings-workspace">{view === 'members' ? t('members.title') : t('ws.yourData')}</h3>
+        <p className="hint">{view === 'members' ? t('members.subtitle') : t('ws.subtitle')}</p>
       </div>
 
       {error && (
@@ -103,7 +153,7 @@ export function WorkspaceSection() {
         </p>
       )}
 
-      {invitations.length > 0 && (
+      {view === 'data' && invitations.length > 0 && (
         <div className="card ws-card">
           <div className="ws-card-head">
             <h4 className="m-0">{t('ws.incoming')}</h4>
@@ -144,6 +194,7 @@ export function WorkspaceSection() {
         </div>
       )}
 
+      {view === 'data' && (
       <div className="card ws-card ws-hero">
         <PersonAvatar name={workspace.ownerName} email={workspace.ownerEmail} avatarUrl={workspace.ownerAvatarUrl} size={52} />
         <div className="grow ws-row-text">
@@ -167,7 +218,11 @@ export function WorkspaceSection() {
         )}
       </div>
 
-      {isOwner && (
+      )}
+
+      {view === 'members' && user?.isAdmin && <CreateMemberCard />}
+
+      {view === 'members' && isOwner && (
         <div className="card ws-card">
           <div className="ws-card-head">
             <h4 className="m-0">{t('ws.members')}</h4>
@@ -205,7 +260,7 @@ export function WorkspaceSection() {
         </div>
       )}
 
-      {isOwner && (
+      {view === 'members' && isOwner && (
         <div className="card ws-card">
           <div className="ws-card-head">
             <h4 className="m-0">{t('ws.invite')}</h4>

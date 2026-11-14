@@ -13,6 +13,7 @@ export function SettingsPage() {
   // Gmail is the admin's: members do not see that tab.
   const tabs = [
     { id: 'workspace', label: t('settings.tabWorkspace') },
+    { id: 'members', label: t('settings.tabMembers') },
     ...(user?.isAdmin ? [{ id: 'gmail', label: t('settings.tabGmail') }] : []),
   ];
   const tab = tabs.some((item) => item.id === requested) ? requested : 'workspace';
@@ -35,7 +36,8 @@ export function SettingsPage() {
         ))}
       </div>
 
-      {tab === 'workspace' && <WorkspaceSection />}
+      {tab === 'workspace' && <WorkspaceSection view="data" />}
+      {tab === 'members' && <WorkspaceSection view="members" />}
       {tab === 'gmail' && <EmailSection />}
     </>
   );

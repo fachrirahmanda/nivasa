@@ -23,6 +23,7 @@ import { createCategory, deleteCategory, listCategories, updateCategory } from '
 import { createTransaction, deleteTransaction, getTransaction, listTransactions, updateTransaction } from './routes/transactions';
 import { listActivity } from './routes/activity';
 import { createSplitBill, deleteSplitBill, getSplitBill, listSplitBills, recordSplitBill, scanInvoice, unrecordSplitBill, updateSplitBill } from './routes/splitbill';
+import { createMember } from './routes/members';
 import { emailStatus, emailConnect, emailCallback, emailDisconnect, emailReset, emailSync, emailDevices, getArchiveSchedule, saveArchiveSchedule, listEmails, markEmailRead } from './routes/email';
 
 // API. The React app is served from Workers Assets; only /api/* reaches this Worker.
@@ -133,6 +134,7 @@ const routes: [Method, string, boolean, Handler][] = [
   ['POST', '/email/disconnect', true, emailDisconnect],
   ['POST', '/email/sync', true, emailSync],
   ['POST', '/email/reset', true, emailReset],
+  ['POST', '/members', true, createMember],
   ['GET', '/emails', true, listEmails],
   ['GET', '/emails/devices', true, emailDevices],
   ['GET', '/email/archive', true, getArchiveSchedule],
