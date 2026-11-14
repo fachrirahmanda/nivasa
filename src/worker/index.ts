@@ -14,7 +14,6 @@ import { addLoan, listLoans, payLoan, removeLoan } from './routes/loans';
 import { addIncome, deleteIncome, listIncomes } from './routes/incomes';
 import { createSalary, deleteSalary, listSalaries, updateSalary } from './routes/salaries';
 import { getAvatar, getProfile, removeAvatar, saveAvatar, saveName } from './routes/profile';
-import { resetData } from './routes/reset';
 import { addAttachment, deleteAttachment, driveCallback, getAttachment, getDrive, listAttachments, removeDrive, startDrive } from './routes/drive';
 import { acceptInvite, declineInvite, getWorkspace, invite, leaveWorkspace, removeMember, revokeInvite } from './routes/workspace';
 import { setPeriodStart } from './routes/period';
@@ -98,7 +97,6 @@ const routes: [Method, string, boolean, Handler][] = [
   ['PUT', '/profile', true, saveName],
   ['PUT', '/profile/avatar', true, saveAvatar],
   ['DELETE', '/profile/avatar', true, removeAvatar],
-  ['POST', '/profile/reset', true, resetData],
   ['GET', '/avatar/:id', true, getAvatar],
   ['GET', '/drive', true, getDrive],
   ['GET', '/drive/connect', true, startDrive],

@@ -91,7 +91,7 @@ export async function exportCsv({ request, env, userId }: RouteContext) {
   }
   // A BOM so Excel opens the file as UTF-8.
   const body = `﻿${lines.join('\r\n')}\r\n`;
-  const filename = `neraca-${range.from}_${range.to}.csv`;
+  const filename = `nivasa-${range.from}_${range.to}.csv`;
 
   return new Response(body, {
     headers: {

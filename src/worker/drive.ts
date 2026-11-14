@@ -10,7 +10,7 @@ import { decryptSecret, encryptSecret } from './crypto';
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const FOLDER_NAME = 'Neraca attachments';
+const FOLDER_NAME = 'Nivasa attachments';
 /** drive_connections holds one row: the app's connection. */
 const CONNECTION = 'app';
 
@@ -109,7 +109,7 @@ async function ensureFolder(env: Env, force = false) {
   const res = await drive(env, `${API}/files?fields=id`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder', description: 'Receipt attachments from Neraca. Deleting files here breaks those attachments.' }),
+    body: JSON.stringify({ name: FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder', description: 'Receipt attachments from Nivasa. Deleting files here breaks those attachments.' }),
   });
   if (!res.ok) throw new HttpError(502, `Folder di Google Drive tidak bisa dibuat (${res.status})`);
   const { id } = (await res.json()) as { id: string };
